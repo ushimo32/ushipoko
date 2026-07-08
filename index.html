@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#ffe4ef">
+<title>うし牧場 🐄</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0;
+    font-family: -apple-system, "Hiragino Maru Gothic ProN", "Hiragino Sans", sans-serif;
+    background: linear-gradient(160deg, #fff0f6 0%, #eaf7ff 55%, #eafff0 100%);
+    color: #5a4a52;
+    min-height: 100%;
+    -webkit-user-select: none; user-select: none;
+    overscroll-behavior: none;
+  }
+  #app {
+    max-width: 440px;
+    margin: 0 auto;
+    padding: 16px 16px 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    min-height: 100vh;
+  }
+  .title {
+    font-size: 22px; font-weight: 800; letter-spacing: .04em;
+    color: #ff8fb1; margin: 6px 0 0;
+  }
+
+  /* カード共通 */
+  .card {
+    width: 100%;
+    background: rgba(255,255,255,0.72);
+    border-radius: 26px;
+    padding: 16px 18px;
+    box-shadow: 0 6px 18px rgba(255,170,200,0.25);
+  }
+
+  /* 上部ステータス */
+  .status { display: flex; flex-direction: column; gap: 10px; }
+  .money-row { display: flex; align-items: baseline; justify-content: space-between; }
+  .money-label { font-size: 13px; color: #b89aa6; font-weight: 700; }
+  .money-val { font-size: 26px; font-weight: 800; color: #ff9a3d; }
+  .seri {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    background: #fff6fa; border-radius: 18px; padding: 8px 12px;
+    font-size: 15px; font-weight: 700; color: #7a6a72;
+  }
+
+  /* 牛房 */
+  .barn {
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+    padding: 22px 18px 20px;
+  }
+  .stage-label {
+    font-size: 14px; font-weight: 800; color: #9a86c9;
+    background: #f1ecff; border-radius: 999px; padding: 6px 16px;
+  }
+  .cow {
+    font-size: 96px; line-height: 1.1;
+    cursor: pointer;
+    filter: drop-shadow(0 8px 10px rgba(180,150,200,0.35));
+    transition: transform .08s ease;
+    touch-action: manipulation;
+  }
+  .cow:active { transform: scale(0.9) rotate(-4deg); }
+  .cow.empty { font-size: 84px; opacity: .5; filter: grayscale(.4); cursor: default; }
+  .rarity {
+    font-size: 15px; font-weight: 800; padding: 4px 14px; border-radius: 999px;
+  }
+  .r-normal { background:#eef3f7; color:#8aa0b2; }
+  .r-good   { background:#e4f7ea; color:#4bb373; }
+  .r-great  { background:#e6efff; color:#5b8bef; }
+  .r-legend { background:linear-gradient(90deg,#fff0c2,#ffd6ec); color:#d98a2b; box-shadow:0 0 0 2px #ffe27a inset; }
+
+  /* 成長バー */
+  .bar-wrap { width: 100%; }
+  .bar-top { display:flex; justify-content: space-between; font-size:12px; color:#b89aa6; font-weight:700; margin-bottom:4px; }
+  .bar {
+    width: 100%; height: 18px; background: #f0e6ec; border-radius: 999px; overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg,#ffd36e,#ff9ec4,#a0d8ff);
+    border-radius: 999px;
+    transition: width .3s ease;
+  }
+
+  /* ボタン */
+  .btns { width: 100%; display: flex; flex-direction: column; gap: 12px; }
+  button.action {
+    width: 100%; min-height: 56px;
+    border: none; border-radius: 20px;
+    font-size: 17px; font-weight: 800; font-family: inherit;
+    color: #fff; cursor: pointer;
+    box-shadow: 0 5px 0 rgba(0,0,0,0.08);
+    transition: transform .06s ease, filter .1s ease;
+    touch-action: manipulation;
+  }
+  button.action:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 2px 0 rgba(0,0,0,0.08); }
+  .btn-adopt { background: linear-gradient(135deg,#ffb0cf,#ff8fb1); }
+  .btn-ship  { background: linear-gradient(135deg,#9ad0ff,#6fb5f6); }
+  button.action:disabled { background: #e2dbe0; color:#b6acb2; cursor: default; box-shadow: 0 5px 0 rgba(0,0,0,0.04); }
+  .btn-sub { font-size: 12px; font-weight: 700; opacity: .85; margin-top: 2px; }
+
+  /* トースト */
+  #toast {
+    position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(20px);
+    background: rgba(90,74,82,0.92); color: #fff; font-weight: 700; font-size: 15px;
+    padding: 12px 20px; border-radius: 999px; opacity: 0; pointer-events: none;
+    transition: opacity .25s ease, transform .25s ease; max-width: 90%; text-align:center;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .hint { font-size: 12px; color: #c3b3bc; text-align: center; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="title">うし牧場 🐄</div>
+
+  <div class="card status">
+    <div class="money-row">
+      <span class="money-label">おさいふ</span>
+      <span class="money-val" id="money">0 G</span>
+    </div>
+    <div class="seri" id="seri">今日のセリ：—</div>
+  </div>
+
+  <div class="card barn">
+    <div class="stage-label" id="stage">牛房はからっぽ</div>
+    <div class="cow empty" id="cow">🏠</div>
+    <div class="rarity r-normal" id="rarity" style="display:none"></div>
+    <div class="bar-wrap">
+      <div class="bar-top"><span>せいちょう</span><span id="growthPct">0%</span></div>
+      <div class="bar"><div class="bar-fill" id="barFill"></div></div>
+    </div>
+  </div>
+
+  <div class="btns">
+    <button class="action btn-adopt" id="adoptBtn">
+      子牛を迎える<span class="btn-sub">30,000 G</span>
+    </button>
+    <button class="action btn-ship" id="shipBtn" disabled>
+      出荷する<span class="btn-sub" id="shipSub">成長するまで待ってね</span>
+    </button>
+  </div>
+
+  <div class="hint" id="hint">牛をなでると ちょっぴり成長するよ 🖐️</div>
+</div>
+<div id="toast"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ===== 定数 =====
+  var SAVE_KEY = "ushiIdleSave_v1";
+  var START_MONEY = 100000;
+  var ADOPT_COST = 30000;
+  var BASE_PRICE = 50000;
+  var GROW_SECONDS = 600;               // 基本 約10分で100%
+  var PET_GAIN = 0.5;                    // なでる：+0.5%
+  var PET_COOLDOWN = 500;               // 0.5秒クールダウン
+
+  // レア度定義（順に判定）
+  var RARITIES = [
+    { key:"normal", name:"ふつう",     prob:0.60, mult:1.0, cls:"r-normal", face:"🐮", faceBig:"🐄", star:"" },
+    { key:"good",   name:"よい",       prob:0.30, mult:1.2, cls:"r-good",   face:"🐮", faceBig:"🐄", star:"✨" },
+    { key:"great",  name:"すごい",     prob:0.09, mult:1.5, cls:"r-great",  face:"🐮", faceBig:"🐄", star:"🌟" },
+    { key:"legend", name:"でんせつ",   prob:0.01, mult:2.0, cls:"r-legend", face:"🐮", faceBig:"🐄", star:"👑" }
+  ];
+
+  function rarityByKey(k){ for (var i=0;i<RARITIES.length;i++){ if(RARITIES[i].key===k) return RARITIES[i]; } return RARITIES[0]; }
+
+  // ===== 状態 =====
+  var state = {
+    money: START_MONEY,
+    cow: null,            // { rarity, growth, lastTick }
+    lastPet: 0,
+    seriDate: null,       // "YYYY-M-D"
+    seriFactor: 1.0
+  };
+
+  // ===== 保存 / 読み込み =====
+  function save() {
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) {}
+  }
+  function load() {
+    try {
+      var raw = localStorage.getItem(SAVE_KEY);
+      if (!raw) return;
+      var s = JSON.parse(raw);
+      if (typeof s.money === "number") state.money = s.money;
+      state.cow = s.cow || null;
+      state.lastPet = s.lastPet || 0;
+      state.seriDate = s.seriDate || null;
+      state.seriFactor = s.seriFactor || 1.0;
+    } catch (e) {}
+  }
+
+  // ===== セリ係数（日替わり 0.8〜1.2）=====
+  function todayKey() {
+    var d = new Date();
+    return d.getFullYear() + "-" + (d.getMonth()+1) + "-" + d.getDate();
+  }
+  // 文字列から決定的な擬似乱数（0〜1）
+  function seedRand(str) {
+    var h = 2166136261;
+    for (var i=0;i<str.length;i++){ h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+    h = (h >>> 0);
+    return (h % 100000) / 100000;
+  }
+  function refreshSeri() {
+    var key = todayKey();
+    if (state.seriDate !== key) {
+      var r = seedRand("seri-" + key);
+      state.seriFactor = Math.round((0.8 + r * 0.4) * 100) / 100;  // 0.80〜1.20
+      state.seriDate = key;
+    }
+  }
+  function seriLabel(f) {
+    if (f >= 1.15) return "とても高め 📈📈";
+    if (f >= 1.05) return "ちょっと高め 📈";
+    if (f >  0.95) return "ふつう 🐄";
+    if (f >  0.85) return "ちょっと安め 📉";
+    return "とても安め 📉📉";
+  }
+
+  // ===== 成長 =====
+  function growthStage(g) {
+    if (g < 33)  return { name:"ミルク期 🍼",     small:true };
+    if (g < 66)  return { name:"もぐもぐ期 🌱",   small:false };
+    if (g < 100) return { name:"むしゃむしゃ期 🌾", small:false };
+    return { name:"しゅっか じゅんび OK！ 🎀", small:false };
+  }
+
+  // ===== 抽選 =====
+  function rollRarity() {
+    var r = Math.random();
+    var acc = 0;
+    for (var i=0;i<RARITIES.length;i++){
+      acc += RARITIES[i].prob;
+      if (r < acc) return RARITIES[i];
+    }
+    return RARITIES[0];
+  }
+
+  // ===== 価格 =====
+  function shipPrice() {
+    if (!state.cow) return 0;
+    var mult = rarityByKey(state.cow.rarity).mult;
+    return Math.round(BASE_PRICE * mult * state.seriFactor);
+  }
+
+  // ===== 表示更新 =====
+  var el = {
+    money: document.getElementById("money"),
+    seri: document.getElementById("seri"),
+    stage: document.getElementById("stage"),
+    cow: document.getElementById("cow"),
+    rarity: document.getElementById("rarity"),
+    growthPct: document.getElementById("growthPct"),
+    barFill: document.getElementById("barFill"),
+    adoptBtn: document.getElementById("adoptBtn"),
+    shipBtn: document.getElementById("shipBtn"),
+    shipSub: document.getElementById("shipSub"),
+    hint: document.getElementById("hint")
+  };
+
+  function fmt(n){ return Math.floor(n).toLocaleString("ja-JP"); }
+
+  function render() {
+    el.money.textContent = fmt(state.money) + " G";
+    el.seri.textContent = "今日のセリ：" + seriLabel(state.seriFactor)
+      + "（×" + state.seriFactor.toFixed(2) + "）";
+
+    if (!state.cow) {
+      el.stage.textContent = "牛房はからっぽ";
+      el.cow.textContent = "🏠";
+      el.cow.className = "cow empty";
+      el.rarity.style.display = "none";
+      el.growthPct.textContent = "0%";
+      el.barFill.style.width = "0%";
+      el.adoptBtn.disabled = state.money < ADOPT_COST;
+      el.shipBtn.disabled = true;
+      el.shipSub.textContent = "先に子牛を迎えよう";
+      el.hint.textContent = "「子牛を迎える」で牧場をはじめよう 🐄";
+      return;
+    }
+
+    var cow = state.cow;
+    var rar = rarityByKey(cow.rarity);
+    var g = Math.min(100, cow.growth);
+    var st = growthStage(g);
+
+    el.stage.textContent = st.name;
+    el.cow.textContent = st.small ? rar.face : rar.faceBig;
+    el.cow.className = "cow";
+    el.cow.style.fontSize = st.small ? "80px" : "104px";
+
+    el.rarity.style.display = "";
+    el.rarity.className = "rarity " + rar.cls;
+    el.rarity.textContent = rar.star + " " + rar.name + "（×" + rar.mult.toFixed(1) + "）";
+
+    el.growthPct.textContent = Math.floor(g) + "%";
+    el.barFill.style.width = g + "%";
+
+    el.adoptBtn.disabled = true;   // 牛房は1つ
+
+    var ready = g >= 100;
+    el.shipBtn.disabled = !ready;
+    el.shipSub.textContent = ready
+      ? (fmt(shipPrice()) + " G で出荷")
+      : "成長するまで待ってね（" + Math.floor(g) + "%）";
+
+    el.hint.textContent = ready
+      ? "出荷して おさいふを ふやそう！ 🎀"
+      : "牛をなでると ちょっぴり成長するよ 🖐️";
+  }
+
+  // ===== トースト =====
+  var toastEl = document.getElementById("toast");
+  var toastTimer = null;
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ toastEl.classList.remove("show"); }, 2200);
+  }
+
+  // ===== アクション =====
+  function adopt() {
+    if (state.cow) return;
+    if (state.money < ADOPT_COST) { toast("おさいふが たりないよ 💦"); return; }
+    state.money -= ADOPT_COST;
+    var rar = rollRarity();
+    state.cow = { rarity: rar.key, growth: 0, lastTick: Date.now() };
+    save(); render();
+    toast(rar.star + " " + rar.name + "の子牛を むかえた！");
+  }
+
+  function pet() {
+    if (!state.cow) return;
+    if (state.cow.growth >= 100) return;
+    var now = Date.now();
+    if (now - state.lastPet < PET_COOLDOWN) return;   // 連打対策
+    state.lastPet = now;
+    state.cow.growth = Math.min(100, state.cow.growth + PET_GAIN);
+    save(); render();
+  }
+
+  function ship() {
+    if (!state.cow || state.cow.growth < 100) return;
+    var price = shipPrice();
+    state.money += price;
+    var rar = rarityByKey(state.cow.rarity);
+    state.cow = null;
+    save(); render();
+    toast(rar.name + "の牛を " + fmt(price) + " G で出荷！ 🎉");
+  }
+
+  // ===== ゲームループ（1秒tick）=====
+  function tick() {
+    refreshSeri();
+    if (state.cow && state.cow.growth < 100) {
+      var now = Date.now();
+      var last = state.cow.lastTick || now;
+      var elapsed = (now - last) / 1000;               // 秒
+      if (elapsed > 0) {
+        var mult = rarityByKey(state.cow.rarity).mult;
+        var gain = (100 / GROW_SECONDS) * mult * elapsed;
+        state.cow.growth = Math.min(100, state.cow.growth + gain);
+        state.cow.lastTick = now;
+      }
+    } else if (state.cow) {
+      state.cow.lastTick = Date.now();
+    }
+    render();
+    save();
+  }
+
+  // ===== 初期化 =====
+  load();
+  refreshSeri();
+  // オフライン中の成長を反映（lastTick 基準で tick が計算）
+  if (state.cow && !state.cow.lastTick) state.cow.lastTick = Date.now();
+  render();
+
+  el.cow.addEventListener("click", pet);
+  el.adoptBtn.addEventListener("click", adopt);
+  el.shipBtn.addEventListener("click", ship);
+
+  setInterval(tick, 1000);
+  tick();
+})();
+</script>
+</body>
+</html>
