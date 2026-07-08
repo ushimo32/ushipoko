@@ -575,10 +575,29 @@
     save();
   }
 
+  // ===== iOS Safari 向け：ダブルタップ／ピンチズームの確実な抑止 =====
+  // touch-action CSS が実機で効かないケースの保険。ゲームは単一ページのため
+  // ページ内ズームを無効化する（OSの画面ズームで代替可能）。
+  function installZoomGuards() {
+    var lastTouchEnd = 0;
+    document.addEventListener("touchend", function(e){
+      // ボタン上のタップは除外（確定操作の click を殺さない）
+      if (e.target && e.target.closest && e.target.closest(".s-btn")) { lastTouchEnd = Date.now(); return; }
+      var now = Date.now();
+      if (now - lastTouchEnd < 350) e.preventDefault();   // 直前タップから350ms未満=ダブルタップ
+      lastTouchEnd = now;
+    }, { passive: false });
+    // iOS独自のピンチズームイベントを無効化
+    document.addEventListener("gesturestart",  function(e){ e.preventDefault(); });
+    document.addEventListener("gesturechange", function(e){ e.preventDefault(); });
+    document.addEventListener("gestureend",    function(e){ e.preventDefault(); });
+  }
+
   // ===== 初期化 =====
   load();
   refreshSeri();
   buildGrid();
+  installZoomGuards();
   render();
   setInterval(tick, 1000);
   tick();
