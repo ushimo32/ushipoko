@@ -120,6 +120,20 @@
   .s-btn.buy   { background: linear-gradient(135deg,#ffd98a,#ffb86b); }
   .s-btn:disabled { background: #e2dbe0; color:#b6acb2; box-shadow: 0 4px 0 rgba(0,0,0,0.04); cursor: default; }
 
+  /* なでた手応え（フローティングテキスト）*/
+  .floaty {
+    position: fixed;
+    transform: translate(-50%, -50%);
+    font-size: 22px; font-weight: 800; color: #ff6fa2;
+    text-shadow: 0 1px 3px rgba(255,255,255,0.9);
+    pointer-events: none; z-index: 60; white-space: nowrap;
+    opacity: 1;
+    transition: transform .8s ease-out, opacity .8s ease-out;
+    will-change: transform, opacity;
+  }
+  .floaty.small { font-size: 17px; color: #a9a2b8; }
+  .floaty.go { transform: translate(-50%, -50%) translateY(-52px); opacity: 0; }
+
   /* トースト */
   #toast {
     position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(20px);
@@ -146,7 +160,7 @@
 
   <div class="grid" id="grid"></div>
 
-  <div class="hint" id="hint">牛をなでると育つよ 🖐️　牛房をふやして たくさん育てよう！</div>
+  <div class="hint" id="hint">牛をなでると育つよ 🖐️　おうちをふやして たくさん育てよう！</div>
 </div>
 <div id="toast"></div>
 
@@ -304,13 +318,32 @@
     save(); render();
     toast(rar.star + " " + rar.name + "の子牛を むかえた！");
   }
-  function pet(i) {
+  // なでる手応え：タップ位置の少し上にフローティングテキストを出す
+  function floatText(ev, text, small) {
+    var el = document.createElement("div");
+    el.className = "floaty" + (small ? " small" : "");
+    el.textContent = text;
+    var x = (ev && ev.clientX != null) ? ev.clientX : window.innerWidth / 2;
+    var y = (ev && ev.clientY != null) ? ev.clientY : window.innerHeight / 2;
+    el.style.left = x + "px";
+    el.style.top = (y - 16) + "px";   // 指の少し上
+    document.body.appendChild(el);
+    requestAnimationFrame(function(){ el.classList.add("go"); });
+    setTimeout(function(){ if (el.parentNode) el.parentNode.removeChild(el); }, 850);
+  }
+  function petAt(i, ev) {
     var barn = state.barns[i];
-    if (!barn || !barn.cow || barn.cow.growth >= 100) return;
+    if (!barn || !barn.cow) return;
+    var cow = barn.cow;
+    if (cow.growth >= 100) { floatText(ev, "しゅっか できるよ 🎀", true); return; }
     var now = Date.now();
-    if (now - (barn.lastPet || 0) < PET_COOLDOWN) return;   // 牛房ごとの連打対策
+    if (now - (barn.lastPet || 0) < PET_COOLDOWN) {   // クールダウン中も無反応にしない
+      floatText(ev, "💤", true);
+      return;
+    }
     barn.lastPet = now;
-    barn.cow.growth = clampGrowth(barn.cow.growth + PET_GAIN);
+    cow.growth = clampGrowth(cow.growth + PET_GAIN);
+    floatText(ev, "+" + PET_GAIN + "% 💕", false);
     save(); render();
   }
   function ship(i) {
@@ -324,14 +357,36 @@
     toast(rar.name + "の牛を " + fmt(price) + " G で出荷！ 🎉");
   }
   function buyBarn(i) {
-    // 次に解放できる牛房のみ購入可（順番に解放）
+    // 次に増やせるおうちのみ購入可（順番に解放）
     if (i !== state.barns.length || i >= MAX_BARNS) return;
     var price = BARN_PRICES[i-1];
     if (state.money < price) { toast("おさいふが たりないよ 💦"); return; }
+    // 詰み防止：購入後の残高が子牛の価格を下回るなら確認する
+    if (state.money - price < ADOPT_COST) {
+      if (!window.confirm("買うと子牛をお迎えできなくなるかも🐄💦 それでも買う?")) return;
+    }
     state.money -= price;
     state.barns.push({ cow:null, lastPet:0 });
+    var count = state.barns.length;
+    if (checkRelief()) { render(); return; }   // 詰み状態なら即補填し応援金メッセージを優先
     save(); render();
-    toast(state.barns.length + "つ目の牛房を 解放した！ 🏡");
+    toast(count + "つ目のおうちを 増やした！ 🏡");
+  }
+
+  // ===== 救済（詰み防止）=====
+  // 牛が0頭かつ所持金が子牛の価格未満なら「応援金」で補填する（何度でも発動）
+  function noCows() {
+    for (var i=0;i<state.barns.length;i++){ if (state.barns[i].cow) return false; }
+    return true;
+  }
+  function checkRelief() {
+    if (noCows() && state.money < ADOPT_COST) {
+      state.money = ADOPT_COST;   // 30,000G まで補填
+      save();
+      toast("🎁 応援金がとどきました！");
+      return true;
+    }
+    return false;
   }
 
   // ===== グリッド構築（6スロットを一度だけ生成）=====
@@ -355,25 +410,30 @@
       grid.appendChild(slot);
 
       (function(idx){
-        emoji.addEventListener("click", function(){ handleEmoji(idx); });
-        btn.addEventListener("click", function(){ handleButton(idx); });
+        // カード全体をタップ判定に（牛→なでる / 空き→迎える / 次→増やす）
+        slot.addEventListener("click", function(ev){ handleCardTap(idx, ev); });
+        // ボタンは専用動作。カードへのバブリングは止める
+        btn.addEventListener("click", function(ev){ ev.stopPropagation(); handleButton(idx, ev); });
       })(i);
 
       slots.push({ slot:slot, top:top, emoji:emoji, mid:mid, bar:bar, fill:fill, btn:btn });
     }
   }
 
-  // emoji タップ：牛→なでる / 空き→迎える / 次の未解放→解放
-  function handleEmoji(i) {
+  // カードタップ：牛→なでる / 空き→迎える / 次の未解放→増やす
+  function handleCardTap(i, ev) {
     var n = state.barns.length;
-    if (i < n) { if (state.barns[i].cow) pet(i); else adopt(i); }
+    if (i < n) { if (state.barns[i].cow) petAt(i, ev); else adopt(i); }
     else if (i === n) buyBarn(i);
   }
-  // ボタン：牛→出荷 / 空き→迎える / 次の未解放→解放
-  function handleButton(i) {
+  // ボタン：牛(完成)→出荷 / 牛(成長中)→なでる / 空き→迎える / 次の未解放→増やす
+  function handleButton(i, ev) {
     var n = state.barns.length;
-    if (i < n) { if (state.barns[i].cow) ship(i); else adopt(i); }
-    else if (i === n) buyBarn(i);
+    if (i < n) {
+      var cow = state.barns[i].cow;
+      if (cow) { if (cow.growth >= 100) ship(i); else petAt(i, ev); }
+      else adopt(i);
+    } else if (i === n) buyBarn(i);
   }
 
   // ===== 表示更新 =====
@@ -384,6 +444,7 @@
     if (i < n) {
       var barn = state.barns[i];
       s.slot.className = "slot";
+      s.slot.style.cursor = "pointer";
       if (barn.cow) {
         var rar = rarityByKey(barn.cow.rarity);
         var g = Math.min(100, barn.cow.growth);
@@ -393,8 +454,9 @@
         s.top.className = "s-top";
         s.top.textContent = st.name;
 
+        // 絵文字を一回り大きく（頭上の演出が指で隠れないサイズ感）
         s.emoji.className = "s-emoji tap";
-        s.emoji.style.fontSize = st.small ? "48px" : "58px";
+        s.emoji.style.fontSize = st.small ? "62px" : "76px";
         s.emoji.textContent = st.small ? rar.face : rar.faceBig;
 
         s.mid.className = "s-mid " + rar.cls;
@@ -403,52 +465,55 @@
         s.bar.className = "s-bar";
         s.fill.style.width = g + "%";
 
+        // 成長中のボタンも押せる（なでる）＝虚無を作らない
         s.btn.className = "s-btn ship";
-        s.btn.disabled = !ready;
+        s.btn.disabled = false;
         s.btn.textContent = ready ? ("出荷 " + fmt(shipPriceFor(barn.cow)) + "G")
                                   : ("育て中 " + Math.floor(g) + "%");
       } else {
-        // 空き牛房 → 「＋」で迎える
+        // 空きおうち → 「＋」で迎える
         s.top.className = "s-top muted";
         s.top.textContent = "あきべや";
         s.emoji.className = "s-emoji plus";
-        s.emoji.style.fontSize = "50px";
+        s.emoji.style.fontSize = "56px";
         s.emoji.textContent = "＋";
         s.mid.className = "s-mid plain";
         s.mid.textContent = "子牛を迎えよう";
         s.bar.className = "s-bar hidden";
         s.fill.style.width = "0%";
         s.btn.className = "s-btn adopt";
-        s.btn.disabled = state.money < ADOPT_COST;
+        s.btn.disabled = false;   // 不足時は adopt() がトーストで案内
         s.btn.textContent = "迎える " + fmt(ADOPT_COST) + "G";
       }
     } else if (i === n && i < MAX_BARNS) {
-      // 次に解放できる牛房（🔒＋価格・購入可）
+      // 次に増やせるおうち（🔒＋価格・購入可）
       var price = BARN_PRICES[i-1];
       s.slot.className = "slot locked";
+      s.slot.style.cursor = "pointer";
       s.top.className = "s-top muted";
-      s.top.textContent = "牛房を拡張";
+      s.top.textContent = "おうちを増やす";
       s.emoji.className = "s-emoji plus";
-      s.emoji.style.fontSize = "42px";
+      s.emoji.style.fontSize = "44px";
       s.emoji.textContent = "🔒";
       s.mid.className = "s-mid plain";
-      s.mid.textContent = "ここを解放できる";
+      s.mid.textContent = "ここを増やせる";
       s.bar.className = "s-bar hidden";
       s.fill.style.width = "0%";
       s.btn.className = "s-btn buy";
-      s.btn.disabled = state.money < price;
-      s.btn.textContent = "解放 " + fmt(price) + "G";
+      s.btn.disabled = false;   // 不足時は buyBarn() がトーストで案内
+      s.btn.textContent = "増やす " + fmt(price) + "G";
     } else {
-      // まだ解放できない牛房（🔒＋価格・非活性）
+      // まだ増やせないおうち（🔒＋価格・非活性）
       var price2 = BARN_PRICES[i-1];
       s.slot.className = "slot locked";
+      s.slot.style.cursor = "default";
       s.top.className = "s-top muted";
       s.top.textContent = "みかいほう";
       s.emoji.className = "s-emoji lock";
-      s.emoji.style.fontSize = "42px";
+      s.emoji.style.fontSize = "44px";
       s.emoji.textContent = "🔒";
       s.mid.className = "s-mid plain";
-      s.mid.textContent = "じゅんばんに解放";
+      s.mid.textContent = "じゅんばんに増える";
       s.bar.className = "s-bar hidden";
       s.fill.style.width = "0%";
       s.btn.className = "s-btn";
@@ -482,6 +547,7 @@
       }
       cow.lastTick = now;
     }
+    checkRelief();   // 詰み状態を検知したら応援金で補填
     render();
     save();
   }
