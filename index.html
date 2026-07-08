@@ -51,61 +51,74 @@
     font-size: 15px; font-weight: 700; color: #7a6a72;
   }
 
-  /* 牛房 */
-  .barn {
-    display: flex; flex-direction: column; align-items: center; gap: 12px;
-    padding: 22px 18px 20px;
+  /* 牛房グリッド（スマホ幅で2列×3段）*/
+  .grid {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
   }
-  .stage-label {
-    font-size: 14px; font-weight: 800; color: #9a86c9;
-    background: #f1ecff; border-radius: 999px; padding: 6px 16px;
+  .slot {
+    background: rgba(255,255,255,0.72);
+    border-radius: 22px;
+    padding: 12px 10px;
+    min-height: 198px;
+    display: flex; flex-direction: column; align-items: center; gap: 7px;
+    box-shadow: 0 5px 14px rgba(255,170,200,0.22);
   }
-  .cow {
-    font-size: 96px; line-height: 1.1;
-    cursor: pointer;
-    filter: drop-shadow(0 8px 10px rgba(180,150,200,0.35));
-    transition: transform .08s ease;
-    touch-action: manipulation;
-  }
-  .cow:active { transform: scale(0.9) rotate(-4deg); }
-  .cow.empty { font-size: 84px; opacity: .5; filter: grayscale(.4); cursor: default; }
-  .rarity {
-    font-size: 15px; font-weight: 800; padding: 4px 14px; border-radius: 999px;
-  }
+  .slot.locked { background: rgba(246,241,245,0.6); box-shadow: none; }
+
+  /* レア度色（共通）*/
   .r-normal { background:#eef3f7; color:#8aa0b2; }
   .r-good   { background:#e4f7ea; color:#4bb373; }
   .r-great  { background:#e6efff; color:#5b8bef; }
   .r-legend { background:linear-gradient(90deg,#fff0c2,#ffd6ec); color:#d98a2b; box-shadow:0 0 0 2px #ffe27a inset; }
 
-  /* 成長バー */
-  .bar-wrap { width: 100%; }
-  .bar-top { display:flex; justify-content: space-between; font-size:12px; color:#b89aa6; font-weight:700; margin-bottom:4px; }
-  .bar {
-    width: 100%; height: 18px; background: #f0e6ec; border-radius: 999px; overflow: hidden;
+  .s-top {
+    font-size: 11px; font-weight: 800; color: #9a86c9;
+    background: #f1ecff; border-radius: 999px; padding: 4px 12px;
+    white-space: nowrap;
   }
-  .bar-fill {
+  .s-top.muted { color: #b6a8c2; background: #efeaf3; }
+
+  .s-emoji { font-size: 56px; line-height: 1.05; margin-top: 2px; touch-action: manipulation; }
+  .s-emoji.tap {
+    cursor: pointer;
+    transition: transform .08s ease;
+    filter: drop-shadow(0 6px 8px rgba(180,150,200,0.3));
+  }
+  .s-emoji.tap:active { transform: scale(0.86) rotate(-5deg); }
+  .s-emoji.plus { color: #ff9ec4; font-weight: 800; cursor: pointer; }
+  .s-emoji.lock { opacity: .5; filter: grayscale(.3); }
+
+  .s-mid {
+    font-size: 11px; font-weight: 800; padding: 2px 10px; border-radius: 999px;
+    min-height: 18px; display: flex; align-items: center; white-space: nowrap;
+  }
+  .s-mid.plain { background: transparent; color: #c3b3bc; font-weight: 700; }
+
+  .s-bar { width: 100%; height: 10px; background: #f0e6ec; border-radius: 999px; overflow: hidden; }
+  .s-bar.hidden { visibility: hidden; }
+  .s-fill {
     height: 100%; width: 0%;
     background: linear-gradient(90deg,#ffd36e,#ff9ec4,#a0d8ff);
-    border-radius: 999px;
-    transition: width .3s ease;
+    border-radius: 999px; transition: width .3s ease;
   }
 
-  /* ボタン */
-  .btns { width: 100%; display: flex; flex-direction: column; gap: 12px; }
-  button.action {
-    width: 100%; min-height: 56px;
-    border: none; border-radius: 20px;
-    font-size: 17px; font-weight: 800; font-family: inherit;
+  .s-btn {
+    width: 100%; min-height: 44px;
+    border: none; border-radius: 14px;
+    font-family: inherit; font-size: 13px; font-weight: 800;
     color: #fff; cursor: pointer;
-    box-shadow: 0 5px 0 rgba(0,0,0,0.08);
-    transition: transform .06s ease, filter .1s ease;
-    touch-action: manipulation;
+    box-shadow: 0 4px 0 rgba(0,0,0,0.07);
+    transition: transform .06s ease; touch-action: manipulation;
+    padding: 0 6px;
   }
-  button.action:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 2px 0 rgba(0,0,0,0.08); }
-  .btn-adopt { background: linear-gradient(135deg,#ffb0cf,#ff8fb1); }
-  .btn-ship  { background: linear-gradient(135deg,#9ad0ff,#6fb5f6); }
-  button.action:disabled { background: #e2dbe0; color:#b6acb2; cursor: default; box-shadow: 0 5px 0 rgba(0,0,0,0.04); }
-  .btn-sub { font-size: 12px; font-weight: 700; opacity: .85; margin-top: 2px; }
+  .s-btn:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 2px 0 rgba(0,0,0,0.07); }
+  .s-btn.adopt { background: linear-gradient(135deg,#ffb0cf,#ff8fb1); }
+  .s-btn.ship  { background: linear-gradient(135deg,#9ad0ff,#6fb5f6); }
+  .s-btn.buy   { background: linear-gradient(135deg,#ffd98a,#ffb86b); }
+  .s-btn:disabled { background: #e2dbe0; color:#b6acb2; box-shadow: 0 4px 0 rgba(0,0,0,0.04); cursor: default; }
 
   /* トースト */
   #toast {
@@ -131,26 +144,9 @@
     <div class="seri" id="seri">今日のセリ：—</div>
   </div>
 
-  <div class="card barn">
-    <div class="stage-label" id="stage">牛房はからっぽ</div>
-    <div class="cow empty" id="cow">🏠</div>
-    <div class="rarity r-normal" id="rarity" style="display:none"></div>
-    <div class="bar-wrap">
-      <div class="bar-top"><span>せいちょう</span><span id="growthPct">0%</span></div>
-      <div class="bar"><div class="bar-fill" id="barFill"></div></div>
-    </div>
-  </div>
+  <div class="grid" id="grid"></div>
 
-  <div class="btns">
-    <button class="action btn-adopt" id="adoptBtn">
-      子牛を迎える<span class="btn-sub">30,000 G</span>
-    </button>
-    <button class="action btn-ship" id="shipBtn" disabled>
-      出荷する<span class="btn-sub" id="shipSub">成長するまで待ってね</span>
-    </button>
-  </div>
-
-  <div class="hint" id="hint">牛をなでると ちょっぴり成長するよ 🖐️</div>
+  <div class="hint" id="hint">牛をなでると育つよ 🖐️　牛房をふやして たくさん育てよう！</div>
 </div>
 <div id="toast"></div>
 
@@ -159,56 +155,91 @@
   "use strict";
 
   // ===== 定数 =====
-  var SAVE_KEY = "ushiIdleSave_v1";
+  var SAVE_KEY = "ushiPokoSave_v2";     // 新形式（複数牛房）
+  var OLD_KEY  = "ushiIdleSave_v1";     // 旧形式（1頭）
   var START_MONEY = 100000;
-  var ADOPT_COST = 30000;
-  var BASE_PRICE = 50000;
+  var ADOPT_COST = 30000;               // 子牛の導入価格（据え置き）
+  var BASE_PRICE = 50000;               // 出荷基本価格（据え置き）
   var GROW_SECONDS = 600;               // 基本 約10分で100%
   var PET_GAIN = 0.5;                    // なでる：+0.5%
   var PET_COOLDOWN = 500;               // 0.5秒クールダウン
+  var MAX_BARNS = 6;                     // 牛房は最大6つ
+  // 2つ目以降の牛房の解放価格（index i の牛房 = BARN_PRICES[i-1]）
+  var BARN_PRICES = [80000, 200000, 500000, 1200000, 3000000];
 
   // レア度定義（順に判定）
   var RARITIES = [
-    { key:"normal", name:"ふつう",     prob:0.60, mult:1.0, cls:"r-normal", face:"🐮", faceBig:"🐄", star:"" },
-    { key:"good",   name:"よい",       prob:0.30, mult:1.2, cls:"r-good",   face:"🐮", faceBig:"🐄", star:"✨" },
-    { key:"great",  name:"すごい",     prob:0.09, mult:1.5, cls:"r-great",  face:"🐮", faceBig:"🐄", star:"🌟" },
-    { key:"legend", name:"でんせつ",   prob:0.01, mult:2.0, cls:"r-legend", face:"🐮", faceBig:"🐄", star:"👑" }
+    { key:"normal", name:"ふつう",   prob:0.60, mult:1.0, cls:"r-normal", face:"🐮", faceBig:"🐄", star:"" },
+    { key:"good",   name:"よい",     prob:0.30, mult:1.2, cls:"r-good",   face:"🐮", faceBig:"🐄", star:"✨" },
+    { key:"great",  name:"すごい",   prob:0.09, mult:1.5, cls:"r-great",  face:"🐮", faceBig:"🐄", star:"🌟" },
+    { key:"legend", name:"でんせつ", prob:0.01, mult:2.0, cls:"r-legend", face:"🐮", faceBig:"🐄", star:"👑" }
   ];
-
   function rarityByKey(k){ for (var i=0;i<RARITIES.length;i++){ if(RARITIES[i].key===k) return RARITIES[i]; } return RARITIES[0]; }
 
   // ===== 状態 =====
+  // barn = { cow: null | {rarity, growth, lastTick}, lastPet: number }
   var state = {
     money: START_MONEY,
-    cow: null,            // { rarity, growth, lastTick }
-    lastPet: 0,
-    seriDate: null,       // "YYYY-M-D"
+    barns: [ { cow:null, lastPet:0 } ],   // 初期は1つ
+    seriDate: null,
     seriFactor: 1.0
   };
 
-  // ===== 保存 / 読み込み =====
+  // ===== 保存 / 読み込み・マイグレーション =====
   function save() {
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) {}
   }
+  function clampGrowth(g){ return Math.max(0, Math.min(100, g)); }
+  function normCow(c){
+    if (c && typeof c === "object" && typeof c.growth === "number" && c.rarity) {
+      return { rarity:c.rarity, growth:clampGrowth(c.growth), lastTick:c.lastTick || Date.now() };
+    }
+    return null;
+  }
+  function normBarn(b){
+    if (!b || typeof b !== "object") return { cow:null, lastPet:0 };
+    return { cow: normCow(b.cow), lastPet: b.lastPet || 0 };
+  }
   function load() {
     try {
+      // 新形式
       var raw = localStorage.getItem(SAVE_KEY);
-      if (!raw) return;
-      var s = JSON.parse(raw);
-      if (typeof s.money === "number") state.money = s.money;
-      state.cow = s.cow || null;
-      state.lastPet = s.lastPet || 0;
-      state.seriDate = s.seriDate || null;
-      state.seriFactor = s.seriFactor || 1.0;
+      if (raw) {
+        var s = JSON.parse(raw);
+        if (s && typeof s.money === "number" && Array.isArray(s.barns) && s.barns.length >= 1) {
+          state.money = s.money;
+          state.barns = s.barns.slice(0, MAX_BARNS).map(normBarn);
+          state.seriDate = s.seriDate || null;
+          state.seriFactor = s.seriFactor || 1.0;
+          return;
+        }
+      }
+      // 旧形式(v1) → 新形式へマイグレーション（旧1頭を牛房1へ）
+      var old = localStorage.getItem(OLD_KEY);
+      if (old) {
+        var o = JSON.parse(old);
+        if (o && typeof o === "object") {
+          state.money = (typeof o.money === "number") ? o.money : START_MONEY;
+          state.barns = [ { cow: normCow(o.cow), lastPet: o.lastPet || 0 } ];
+          state.seriDate = o.seriDate || null;
+          state.seriFactor = o.seriFactor || 1.0;
+          save();  // 新キーへ保存（以降は新形式で読み込み）
+          return;
+        }
+      }
     } catch (e) {}
+    // どちらも読めない場合のみ初期化
+    state.money = START_MONEY;
+    state.barns = [ { cow:null, lastPet:0 } ];
+    state.seriDate = null;
+    state.seriFactor = 1.0;
   }
 
-  // ===== セリ係数（日替わり 0.8〜1.2）=====
+  // ===== セリ係数（日替わり 0.8〜1.2・全牛房共通）=====
   function todayKey() {
     var d = new Date();
     return d.getFullYear() + "-" + (d.getMonth()+1) + "-" + d.getDate();
   }
-  // 文字列から決定的な擬似乱数（0〜1）
   function seedRand(str) {
     var h = 2166136261;
     for (var i=0;i<str.length;i++){ h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
@@ -231,97 +262,26 @@
     return "とても安め 📉📉";
   }
 
-  // ===== 成長 =====
+  // ===== 成長段階 =====
   function growthStage(g) {
-    if (g < 33)  return { name:"ミルク期 🍼",     small:true };
-    if (g < 66)  return { name:"もぐもぐ期 🌱",   small:false };
+    if (g < 33)  return { name:"ミルク期 🍼",       small:true };
+    if (g < 66)  return { name:"もぐもぐ期 🌱",     small:false };
     if (g < 100) return { name:"むしゃむしゃ期 🌾", small:false };
-    return { name:"しゅっか じゅんび OK！ 🎀", small:false };
+    return { name:"しゅっか OK！ 🎀", small:false };
   }
 
-  // ===== 抽選 =====
+  // ===== 抽選・価格 =====
   function rollRarity() {
-    var r = Math.random();
-    var acc = 0;
-    for (var i=0;i<RARITIES.length;i++){
-      acc += RARITIES[i].prob;
-      if (r < acc) return RARITIES[i];
-    }
+    var r = Math.random(), acc = 0;
+    for (var i=0;i<RARITIES.length;i++){ acc += RARITIES[i].prob; if (r < acc) return RARITIES[i]; }
     return RARITIES[0];
   }
-
-  // ===== 価格 =====
-  function shipPrice() {
-    if (!state.cow) return 0;
-    var mult = rarityByKey(state.cow.rarity).mult;
-    return Math.round(BASE_PRICE * mult * state.seriFactor);
+  function shipPriceFor(cow) {
+    if (!cow) return 0;
+    return Math.round(BASE_PRICE * rarityByKey(cow.rarity).mult * state.seriFactor);
   }
-
-  // ===== 表示更新 =====
-  var el = {
-    money: document.getElementById("money"),
-    seri: document.getElementById("seri"),
-    stage: document.getElementById("stage"),
-    cow: document.getElementById("cow"),
-    rarity: document.getElementById("rarity"),
-    growthPct: document.getElementById("growthPct"),
-    barFill: document.getElementById("barFill"),
-    adoptBtn: document.getElementById("adoptBtn"),
-    shipBtn: document.getElementById("shipBtn"),
-    shipSub: document.getElementById("shipSub"),
-    hint: document.getElementById("hint")
-  };
 
   function fmt(n){ return Math.floor(n).toLocaleString("ja-JP"); }
-
-  function render() {
-    el.money.textContent = fmt(state.money) + " G";
-    el.seri.textContent = "今日のセリ：" + seriLabel(state.seriFactor)
-      + "（×" + state.seriFactor.toFixed(2) + "）";
-
-    if (!state.cow) {
-      el.stage.textContent = "牛房はからっぽ";
-      el.cow.textContent = "🏠";
-      el.cow.className = "cow empty";
-      el.rarity.style.display = "none";
-      el.growthPct.textContent = "0%";
-      el.barFill.style.width = "0%";
-      el.adoptBtn.disabled = state.money < ADOPT_COST;
-      el.shipBtn.disabled = true;
-      el.shipSub.textContent = "先に子牛を迎えよう";
-      el.hint.textContent = "「子牛を迎える」で牧場をはじめよう 🐄";
-      return;
-    }
-
-    var cow = state.cow;
-    var rar = rarityByKey(cow.rarity);
-    var g = Math.min(100, cow.growth);
-    var st = growthStage(g);
-
-    el.stage.textContent = st.name;
-    el.cow.textContent = st.small ? rar.face : rar.faceBig;
-    el.cow.className = "cow";
-    el.cow.style.fontSize = st.small ? "80px" : "104px";
-
-    el.rarity.style.display = "";
-    el.rarity.className = "rarity " + rar.cls;
-    el.rarity.textContent = rar.star + " " + rar.name + "（×" + rar.mult.toFixed(1) + "）";
-
-    el.growthPct.textContent = Math.floor(g) + "%";
-    el.barFill.style.width = g + "%";
-
-    el.adoptBtn.disabled = true;   // 牛房は1つ
-
-    var ready = g >= 100;
-    el.shipBtn.disabled = !ready;
-    el.shipSub.textContent = ready
-      ? (fmt(shipPrice()) + " G で出荷")
-      : "成長するまで待ってね（" + Math.floor(g) + "%）";
-
-    el.hint.textContent = ready
-      ? "出荷して おさいふを ふやそう！ 🎀"
-      : "牛をなでると ちょっぴり成長するよ 🖐️";
-  }
 
   // ===== トースト =====
   var toastEl = document.getElementById("toast");
@@ -333,52 +293,194 @@
     toastTimer = setTimeout(function(){ toastEl.classList.remove("show"); }, 2200);
   }
 
-  // ===== アクション =====
-  function adopt() {
-    if (state.cow) return;
+  // ===== アクション（すべて牛房単位）=====
+  function adopt(i) {
+    var barn = state.barns[i];
+    if (!barn || barn.cow) return;
     if (state.money < ADOPT_COST) { toast("おさいふが たりないよ 💦"); return; }
     state.money -= ADOPT_COST;
     var rar = rollRarity();
-    state.cow = { rarity: rar.key, growth: 0, lastTick: Date.now() };
+    barn.cow = { rarity: rar.key, growth: 0, lastTick: Date.now() };
     save(); render();
     toast(rar.star + " " + rar.name + "の子牛を むかえた！");
   }
-
-  function pet() {
-    if (!state.cow) return;
-    if (state.cow.growth >= 100) return;
+  function pet(i) {
+    var barn = state.barns[i];
+    if (!barn || !barn.cow || barn.cow.growth >= 100) return;
     var now = Date.now();
-    if (now - state.lastPet < PET_COOLDOWN) return;   // 連打対策
-    state.lastPet = now;
-    state.cow.growth = Math.min(100, state.cow.growth + PET_GAIN);
+    if (now - (barn.lastPet || 0) < PET_COOLDOWN) return;   // 牛房ごとの連打対策
+    barn.lastPet = now;
+    barn.cow.growth = clampGrowth(barn.cow.growth + PET_GAIN);
     save(); render();
   }
-
-  function ship() {
-    if (!state.cow || state.cow.growth < 100) return;
-    var price = shipPrice();
+  function ship(i) {
+    var barn = state.barns[i];
+    if (!barn || !barn.cow || barn.cow.growth < 100) return;
+    var price = shipPriceFor(barn.cow);
+    var rar = rarityByKey(barn.cow.rarity);
     state.money += price;
-    var rar = rarityByKey(state.cow.rarity);
-    state.cow = null;
+    barn.cow = null;
     save(); render();
     toast(rar.name + "の牛を " + fmt(price) + " G で出荷！ 🎉");
+  }
+  function buyBarn(i) {
+    // 次に解放できる牛房のみ購入可（順番に解放）
+    if (i !== state.barns.length || i >= MAX_BARNS) return;
+    var price = BARN_PRICES[i-1];
+    if (state.money < price) { toast("おさいふが たりないよ 💦"); return; }
+    state.money -= price;
+    state.barns.push({ cow:null, lastPet:0 });
+    save(); render();
+    toast(state.barns.length + "つ目の牛房を 解放した！ 🏡");
+  }
+
+  // ===== グリッド構築（6スロットを一度だけ生成）=====
+  var slots = [];
+  function buildGrid() {
+    var grid = document.getElementById("grid");
+    for (var i=0;i<MAX_BARNS;i++){
+      var slot = document.createElement("div");
+      slot.className = "slot";
+
+      var top = document.createElement("div"); top.className = "s-top";
+      var emoji = document.createElement("div"); emoji.className = "s-emoji";
+      var mid = document.createElement("div"); mid.className = "s-mid";
+      var bar = document.createElement("div"); bar.className = "s-bar";
+      var fill = document.createElement("div"); fill.className = "s-fill";
+      bar.appendChild(fill);
+      var btn = document.createElement("button"); btn.className = "s-btn"; btn.type = "button";
+
+      slot.appendChild(top); slot.appendChild(emoji); slot.appendChild(mid);
+      slot.appendChild(bar); slot.appendChild(btn);
+      grid.appendChild(slot);
+
+      (function(idx){
+        emoji.addEventListener("click", function(){ handleEmoji(idx); });
+        btn.addEventListener("click", function(){ handleButton(idx); });
+      })(i);
+
+      slots.push({ slot:slot, top:top, emoji:emoji, mid:mid, bar:bar, fill:fill, btn:btn });
+    }
+  }
+
+  // emoji タップ：牛→なでる / 空き→迎える / 次の未解放→解放
+  function handleEmoji(i) {
+    var n = state.barns.length;
+    if (i < n) { if (state.barns[i].cow) pet(i); else adopt(i); }
+    else if (i === n) buyBarn(i);
+  }
+  // ボタン：牛→出荷 / 空き→迎える / 次の未解放→解放
+  function handleButton(i) {
+    var n = state.barns.length;
+    if (i < n) { if (state.barns[i].cow) ship(i); else adopt(i); }
+    else if (i === n) buyBarn(i);
+  }
+
+  // ===== 表示更新 =====
+  function updateSlot(i) {
+    var s = slots[i];
+    var n = state.barns.length;
+
+    if (i < n) {
+      var barn = state.barns[i];
+      s.slot.className = "slot";
+      if (barn.cow) {
+        var rar = rarityByKey(barn.cow.rarity);
+        var g = Math.min(100, barn.cow.growth);
+        var st = growthStage(g);
+        var ready = g >= 100;
+
+        s.top.className = "s-top";
+        s.top.textContent = st.name;
+
+        s.emoji.className = "s-emoji tap";
+        s.emoji.style.fontSize = st.small ? "48px" : "58px";
+        s.emoji.textContent = st.small ? rar.face : rar.faceBig;
+
+        s.mid.className = "s-mid " + rar.cls;
+        s.mid.textContent = (rar.star ? rar.star + " " : "") + rar.name + "（×" + rar.mult.toFixed(1) + "）";
+
+        s.bar.className = "s-bar";
+        s.fill.style.width = g + "%";
+
+        s.btn.className = "s-btn ship";
+        s.btn.disabled = !ready;
+        s.btn.textContent = ready ? ("出荷 " + fmt(shipPriceFor(barn.cow)) + "G")
+                                  : ("育て中 " + Math.floor(g) + "%");
+      } else {
+        // 空き牛房 → 「＋」で迎える
+        s.top.className = "s-top muted";
+        s.top.textContent = "あきべや";
+        s.emoji.className = "s-emoji plus";
+        s.emoji.style.fontSize = "50px";
+        s.emoji.textContent = "＋";
+        s.mid.className = "s-mid plain";
+        s.mid.textContent = "子牛を迎えよう";
+        s.bar.className = "s-bar hidden";
+        s.fill.style.width = "0%";
+        s.btn.className = "s-btn adopt";
+        s.btn.disabled = state.money < ADOPT_COST;
+        s.btn.textContent = "迎える " + fmt(ADOPT_COST) + "G";
+      }
+    } else if (i === n && i < MAX_BARNS) {
+      // 次に解放できる牛房（🔒＋価格・購入可）
+      var price = BARN_PRICES[i-1];
+      s.slot.className = "slot locked";
+      s.top.className = "s-top muted";
+      s.top.textContent = "牛房を拡張";
+      s.emoji.className = "s-emoji plus";
+      s.emoji.style.fontSize = "42px";
+      s.emoji.textContent = "🔒";
+      s.mid.className = "s-mid plain";
+      s.mid.textContent = "ここを解放できる";
+      s.bar.className = "s-bar hidden";
+      s.fill.style.width = "0%";
+      s.btn.className = "s-btn buy";
+      s.btn.disabled = state.money < price;
+      s.btn.textContent = "解放 " + fmt(price) + "G";
+    } else {
+      // まだ解放できない牛房（🔒＋価格・非活性）
+      var price2 = BARN_PRICES[i-1];
+      s.slot.className = "slot locked";
+      s.top.className = "s-top muted";
+      s.top.textContent = "みかいほう";
+      s.emoji.className = "s-emoji lock";
+      s.emoji.style.fontSize = "42px";
+      s.emoji.textContent = "🔒";
+      s.mid.className = "s-mid plain";
+      s.mid.textContent = "じゅんばんに解放";
+      s.bar.className = "s-bar hidden";
+      s.fill.style.width = "0%";
+      s.btn.className = "s-btn";
+      s.btn.disabled = true;
+      s.btn.textContent = "🔒 " + fmt(price2) + "G";
+    }
+  }
+
+  var moneyEl = document.getElementById("money");
+  var seriEl = document.getElementById("seri");
+  function render() {
+    moneyEl.textContent = fmt(state.money) + " G";
+    seriEl.textContent = "今日のセリ：" + seriLabel(state.seriFactor) + "（×" + state.seriFactor.toFixed(2) + "）";
+    for (var i=0;i<MAX_BARNS;i++) updateSlot(i);
   }
 
   // ===== ゲームループ（1秒tick）=====
   function tick() {
     refreshSeri();
-    if (state.cow && state.cow.growth < 100) {
-      var now = Date.now();
-      var last = state.cow.lastTick || now;
-      var elapsed = (now - last) / 1000;               // 秒
-      if (elapsed > 0) {
-        var mult = rarityByKey(state.cow.rarity).mult;
-        var gain = (100 / GROW_SECONDS) * mult * elapsed;
-        state.cow.growth = Math.min(100, state.cow.growth + gain);
-        state.cow.lastTick = now;
+    var now = Date.now();
+    for (var i=0;i<state.barns.length;i++){
+      var cow = state.barns[i].cow;
+      if (!cow) continue;
+      if (cow.growth < 100) {
+        var last = cow.lastTick || now;
+        var elapsed = (now - last) / 1000;
+        if (elapsed > 0) {
+          var mult = rarityByKey(cow.rarity).mult;
+          cow.growth = clampGrowth(cow.growth + (100 / GROW_SECONDS) * mult * elapsed);
+        }
       }
-    } else if (state.cow) {
-      state.cow.lastTick = Date.now();
+      cow.lastTick = now;
     }
     render();
     save();
@@ -387,14 +489,8 @@
   // ===== 初期化 =====
   load();
   refreshSeri();
-  // オフライン中の成長を反映（lastTick 基準で tick が計算）
-  if (state.cow && !state.cow.lastTick) state.cow.lastTick = Date.now();
+  buildGrid();
   render();
-
-  el.cow.addEventListener("click", pet);
-  el.adoptBtn.addEventListener("click", adopt);
-  el.shipBtn.addEventListener("click", ship);
-
   setInterval(tick, 1000);
   tick();
 })();
