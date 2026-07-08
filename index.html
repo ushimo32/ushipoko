@@ -19,6 +19,7 @@
     min-height: 100%;
     -webkit-user-select: none; user-select: none;   /* 連打時のテキスト選択防止 */
     overscroll-behavior: none;
+    touch-action: manipulation;   /* 背景・隙間へのダブルタップズームも無効化 */
   }
   #app {
     max-width: 440px;
@@ -61,6 +62,7 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
+    touch-action: pan-y;   /* 縦スクロールのみ許可・ピンチ/ダブルタップ無効。複数指のpointerdownを各カードへ個別配送 */
   }
   .slot {
     background: rgba(255,255,255,0.72);
@@ -430,18 +432,29 @@
     }
   }
 
-  // カードタップ：牛→なでる / 空き→迎える / 次の未解放→増やす
+  // なで判定領域：牛の絵文字を中心に、絵文字サイズの約1.5倍の円内だけ反応
+  function withinPetZone(i, ev) {
+    if (ev.clientX == null) return true;   // 座標が取れない場合は許可
+    var r = slots[i].emoji.getBoundingClientRect();
+    var cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    var radius = Math.max(r.width, r.height) * 0.75;   // 直径 ≒ 絵文字の1.5倍
+    var dx = ev.clientX - cx, dy = ev.clientY - cy;
+    return (dx * dx + dy * dy) <= radius * radius;
+  }
+  // カードタップ：牛→(絵文字周辺のみ)なでる / 空き→迎える / 次の未解放→増やす
   function handleCardTap(i, ev) {
     var n = state.barns.length;
-    if (i < n) { if (state.barns[i].cow) petAt(i, ev); else adopt(i); }
-    else if (i === n) buyBarn(i);
+    if (i < n) {
+      if (state.barns[i].cow) { if (withinPetZone(i, ev)) petAt(i, ev); }  // テキスト・余白は無反応
+      else adopt(i);
+    } else if (i === n) buyBarn(i);
   }
-  // ボタン：牛(完成)→出荷 / 牛(成長中)→なでる / 空き→迎える / 次の未解放→増やす
+  // ボタン：牛(完成)→出荷 / 空き→迎える / 次の未解放→増やす（育て中ボタンのなで反応は無し）
   function handleButton(i, ev) {
     var n = state.barns.length;
     if (i < n) {
       var cow = state.barns[i].cow;
-      if (cow) { if (cow.growth >= 100) ship(i); else petAt(i, ev); }
+      if (cow) { if (cow.growth >= 100) ship(i); }   // 育て中は非活性・なで無効
       else adopt(i);
     } else if (i === n) buyBarn(i);
   }
@@ -475,9 +488,9 @@
         s.bar.className = "s-bar";
         s.fill.style.width = g + "%";
 
-        // 成長中のボタンも押せる（なでる）＝虚無を作らない
+        // 出荷は完成時のみ。育て中ボタンは非活性（なで無効）
         s.btn.className = "s-btn ship";
-        s.btn.disabled = false;
+        s.btn.disabled = !ready;
         s.btn.textContent = ready ? ("出荷 " + fmt(shipPriceFor(barn.cow)) + "G")
                                   : ("育て中 " + Math.floor(g) + "%");
       } else {
