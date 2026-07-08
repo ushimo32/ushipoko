@@ -2,18 +2,22 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#ffe4ef">
 <title>うしぽこ 🐄</title>
 <style>
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;   /* タップ時の灰色ハイライト除去 */
+    -webkit-touch-callout: none;                /* 絵文字などの長押しメニュー防止 */
+  }
   html, body {
     margin: 0; padding: 0;
     font-family: -apple-system, "Hiragino Maru Gothic ProN", "Hiragino Sans", sans-serif;
     background: linear-gradient(160deg, #fff0f6 0%, #eaf7ff 55%, #eafff0 100%);
     color: #5a4a52;
     min-height: 100%;
-    -webkit-user-select: none; user-select: none;
+    -webkit-user-select: none; user-select: none;   /* 連打時のテキスト選択防止 */
     overscroll-behavior: none;
   }
   #app {
@@ -65,6 +69,7 @@
     min-height: 198px;
     display: flex; flex-direction: column; align-items: center; gap: 7px;
     box-shadow: 0 5px 14px rgba(255,170,200,0.22);
+    touch-action: manipulation;   /* ダブルタップズーム無効化 */
   }
   .slot.locked { background: rgba(246,241,245,0.6); box-shadow: none; }
 
@@ -409,12 +414,17 @@
       slot.appendChild(bar); slot.appendChild(btn);
       grid.appendChild(slot);
 
-      (function(idx){
+      (function(idx, btnEl){
         // カード全体をタップ判定に（牛→なでる / 空き→迎える / 次→増やす）
-        slot.addEventListener("click", function(ev){ handleCardTap(idx, ev); });
-        // ボタンは専用動作。カードへのバブリングは止める
-        btn.addEventListener("click", function(ev){ ev.stopPropagation(); handleButton(idx, ev); });
-      })(i);
+        // click ではなく pointerdown で 300ms 遅延を回避し連打の即応性を上げる。
+        // ボタン上のタップはボタン側で処理するため除外（二重発火防止）。
+        slot.addEventListener("pointerdown", function(ev){
+          if (btnEl.contains(ev.target)) return;
+          handleCardTap(idx, ev);
+        });
+        // ボタンは専用動作（出荷等の確定操作なので click のまま）。
+        btn.addEventListener("click", function(ev){ handleButton(idx, ev); });
+      })(i, btn);
 
       slots.push({ slot:slot, top:top, emoji:emoji, mid:mid, bar:bar, fill:fill, btn:btn });
     }
