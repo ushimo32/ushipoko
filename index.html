@@ -581,8 +581,10 @@
   function installZoomGuards() {
     var lastTouchEnd = 0;
     document.addEventListener("touchend", function(e){
-      // ボタン上のタップは除外（確定操作の click を殺さない）
-      if (e.target && e.target.closest && e.target.closest(".s-btn")) { lastTouchEnd = Date.now(); return; }
+      // 活性ボタン上のタップのみ除外（確定操作の click を殺さない）。
+      // disabled な「育て中」ボタンは抜け道になるので抑止対象に含める。
+      var btn = e.target && e.target.closest ? e.target.closest(".s-btn") : null;
+      if (btn && !btn.disabled) { lastTouchEnd = Date.now(); return; }
       var now = Date.now();
       if (now - lastTouchEnd < 350) e.preventDefault();   // 直前タップから350ms未満=ダブルタップ
       lastTouchEnd = now;
