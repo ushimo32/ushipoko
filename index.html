@@ -197,7 +197,7 @@
 
   <div class="grid" id="grid"></div>
 
-  <div class="hint" id="hint">牛をなでると育つよ 🖐️　おうちをふやして たくさん育てよう！</div>
+  <div class="hint">牛をなでると育つよ 🖐️　おうちをふやして たくさん育てよう！</div>
 </div>
 <div id="toast"></div>
 
@@ -238,7 +238,7 @@
   function rarityByKey(k){ for (var i=0;i<RARITIES.length;i++){ if(RARITIES[i].key===k) return RARITIES[i]; } return RARITIES[0]; }
 
   // ===== 状態 =====
-  // barn = { cow: null | {rarity, growth, lastTick}, lastPet: number }
+  // barn = { cow: null | {rarity, growth}, lastPet: number }（成長は state.lastUpdate の時刻差分で計算）
   var state = {
     money: START_MONEY,
     barns: [ { cow:null, lastPet:0 } ],   // 初期は1つ
@@ -254,7 +254,7 @@
   function clampGrowth(g){ return Math.max(0, Math.min(100, g)); }
   function normCow(c){
     if (c && typeof c === "object" && typeof c.growth === "number" && c.rarity) {
-      return { rarity:c.rarity, growth:clampGrowth(c.growth), lastTick:c.lastTick || Date.now() };
+      return { rarity:c.rarity, growth:clampGrowth(c.growth) };   // 旧セーブの lastTick は無視（成長は state.lastUpdate 基準）
     }
     return null;
   }
@@ -267,7 +267,8 @@
       // 新形式
       var raw = localStorage.getItem(SAVE_KEY);
       if (raw) {
-        var s = JSON.parse(raw);
+        // v2キーがある＝既にv2利用者。ここで確定し、不正でも v1 には戻さない
+        var s = JSON.parse(raw);   // 壊れていれば catch → 初期化
         if (s && typeof s.money === "number" && Array.isArray(s.barns) && s.barns.length >= 1) {
           state.money = s.money;
           state.barns = s.barns.slice(0, MAX_BARNS).map(normBarn);
@@ -277,19 +278,22 @@
           state.lastUpdate = (typeof s.lastUpdate === "number") ? s.lastUpdate : Date.now();
           return;
         }
-      }
-      // 旧形式(v1) → 新形式へマイグレーション（旧1頭を牛房1へ）
-      var old = localStorage.getItem(OLD_KEY);
-      if (old) {
-        var o = JSON.parse(old);
-        if (o && typeof o === "object") {
-          state.money = (typeof o.money === "number") ? o.money : START_MONEY;
-          state.barns = [ { cow: normCow(o.cow), lastPet: o.lastPet || 0 } ];
-          state.seriDate = o.seriDate || null;
-          state.seriFactor = o.seriFactor || 1.0;
-          state.lastUpdate = Date.now();   // 遡及なしで移行
-          save();  // 新キーへ保存（以降は新形式で読み込み）
-          return;
+        // v2キーはあるが形が不正 → v1 に戻さず初期化（下へ抜ける）
+      } else {
+        // v2キーが無い場合のみ 旧形式(v1) → 新形式へマイグレーション（旧1頭を牛房1へ）
+        var old = localStorage.getItem(OLD_KEY);
+        if (old) {
+          var o = JSON.parse(old);
+          if (o && typeof o === "object") {
+            state.money = (typeof o.money === "number") ? o.money : START_MONEY;
+            state.barns = [ { cow: normCow(o.cow), lastPet: o.lastPet || 0 } ];
+            state.seriDate = o.seriDate || null;
+            state.seriFactor = o.seriFactor || 1.0;
+            state.lastUpdate = Date.now();   // 遡及なしで移行
+            save();  // 新キーへ保存（以降は新形式で読み込み）
+            try { localStorage.removeItem(OLD_KEY); } catch (e2) {}   // 移行完了。旧キーを掃除
+            return;
+          }
         }
       }
     } catch (e) {}
@@ -366,7 +370,7 @@
     if (state.money < ADOPT_COST) { toast("おさいふが たりないよ 💦"); return; }
     state.money -= ADOPT_COST;
     var rar = rollRarity();
-    barn.cow = { rarity: rar.key, growth: 0, lastTick: Date.now() };
+    barn.cow = { rarity: rar.key, growth: 0 };
     save(); render();
     toast(rar.star + " " + rar.name + "の子牛を むかえた！");
   }
@@ -462,12 +466,17 @@
       grid.appendChild(slot);
 
       (function(idx, btnEl){
-        // カード全体をタップ判定に（牛→なでる / 空き→迎える / 次→増やす）
-        // click ではなく pointerdown で 300ms 遅延を回避し連打の即応性を上げる。
-        // ボタン上のタップはボタン側で処理するため除外（二重発火防止）。
+        // なでる（お金が動かない）は即応性重視で pointerdown。
+        // 絵文字周辺のみ反応するのでスクロール起点の誤反応は実害なし（+0.5%のみ）。
         slot.addEventListener("pointerdown", function(ev){
           if (btnEl.contains(ev.target)) return;
-          handleCardTap(idx, ev);
+          handleCardPet(idx, ev);
+        });
+        // お金が動く操作（迎える/増やす）は click。
+        // pointerdown だとスクロール起点の接触で誤購入するため、静止タップの click に限定。
+        slot.addEventListener("click", function(ev){
+          if (btnEl.contains(ev.target)) return;   // ボタンは専用ハンドラに任せる
+          handleCardBuy(idx);
         });
         // ボタンは専用動作（出荷等の確定操作なので click のまま）。
         btn.addEventListener("click", function(ev){ handleButton(idx, ev); });
@@ -486,13 +495,16 @@
     var dx = ev.clientX - cx, dy = ev.clientY - cy;
     return (dx * dx + dy * dy) <= radius * radius;
   }
-  // カードタップ：牛→(絵文字周辺のみ)なでる / 空き→迎える / 次の未解放→増やす
-  function handleCardTap(i, ev) {
+  // カードの pointerdown：牛の絵文字周辺のみ「なでる」（お金は動かない）
+  function handleCardPet(i, ev) {
     var n = state.barns.length;
-    if (i < n) {
-      if (state.barns[i].cow) { if (withinPetZone(i, ev)) petAt(i, ev); }  // テキスト・余白は無反応
-      else adopt(i);
-    } else if (i === n) buyBarn(i);
+    if (i < n && state.barns[i].cow && withinPetZone(i, ev)) petAt(i, ev);  // テキスト・余白は無反応
+  }
+  // カードの click：お金が動く操作。空き→迎える / 次の未解放→増やす
+  function handleCardBuy(i) {
+    var n = state.barns.length;
+    if (i < n) { if (!state.barns[i].cow) adopt(i); }
+    else if (i === n) buyBarn(i);
   }
   // ボタン：牛(完成)→出荷 / 空き→迎える / 次の未解放→増やす（育て中ボタンのなで反応は無し）
   function handleButton(i, ev) {
@@ -714,7 +726,7 @@
   // タブ非表示→復帰でも「おかえり」を発火（復帰時に差分をまとめて反映）
   document.addEventListener("visibilitychange", function(){
     if (document.visibilityState === "visible") { processReturn(); startLoop(); }
-    else { stopLoop(); }
+    else { applyGrowth(Date.now()); save(); stopLoop(); }   // 破棄前に成長を確定保存
   });
 })();
 </script>
