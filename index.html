@@ -178,7 +178,20 @@
     font-size: 15px; font-weight: 800; color: #6a5a62;
     background: #fff6fa; border-radius: 14px; padding: 10px 12px;
   }
-  #wClose { max-width: 200px; }
+  #wClose, #sClose { max-width: 200px; }
+
+  /* サシ度☆5の豪華演出 */
+  .sashi-max .modal-card {
+    background: linear-gradient(160deg,#fffaf0,#fff2f8);
+    box-shadow: 0 0 0 3px #ffe27a, 0 12px 34px rgba(220,170,90,0.5);
+  }
+  .sashi-max .modal-title { color: #e0982a; }
+  .sashi-max #sSashi { color: #d98a2b; background: #fff6e6; }
+  .sashi-max .modal-emoji { animation: sparkle .8s ease-in-out infinite alternate; }
+  @keyframes sparkle {
+    from { transform: scale(1);    filter: drop-shadow(0 0 1px #ffe27a); }
+    to   { transform: scale(1.14); filter: drop-shadow(0 0 9px #ffd54a); }
+  }
 
   .hint { font-size: 12px; color: #c3b3bc; text-align: center; }
 </style>
@@ -208,6 +221,18 @@
     <div class="modal-away" id="wAway"></div>
     <div class="modal-lines" id="wLines"></div>
     <button class="s-btn adopt" id="wClose" type="button">ただいま！</button>
+  </div>
+</div>
+
+<div id="sashi" class="modal-overlay" hidden>
+  <div class="modal-card">
+    <div class="modal-emoji" id="sEmoji">🥩</div>
+    <div class="modal-title" id="sTitle">しゅっか！🎉</div>
+    <div class="modal-lines">
+      <div class="modal-line" id="sSashi"></div>
+      <div class="modal-line" id="sMoney"></div>
+    </div>
+    <button class="s-btn ship" id="sClose" type="button">やった！</button>
   </div>
 </div>
 
@@ -351,6 +376,25 @@
     return Math.round(BASE_PRICE * rarityByKey(cow.rarity).mult * state.seriFactor);
   }
 
+  // ===== サシ度（☆1〜5・出荷時に抽選し価格へ最後に掛ける。保存はしない）=====
+  var SASHI_BONUS = [0.9, 1.0, 1.1, 1.25, 1.5];   // index = ☆-1
+  // レア度キー → ☆1..☆5 の確率（高レアほど良いサシが出やすい）
+  var SASHI_PROB = {
+    normal: [0.20, 0.40, 0.30, 0.09, 0.01],
+    good:   [0.10, 0.35, 0.35, 0.17, 0.03],
+    great:  [0.05, 0.25, 0.38, 0.24, 0.08],
+    legend: [0.00, 0.15, 0.35, 0.32, 0.18]
+  };
+  function rollSashi(rarityKey) {
+    var probs = SASHI_PROB[rarityKey] || SASHI_PROB.normal;
+    var r = Math.random(), acc = 0;
+    for (var i=0;i<probs.length;i++){ acc += probs[i]; if (r < acc) return i + 1; }
+    return probs.length;   // ☆5（丸め誤差の保険）
+  }
+  function sashiBonus(stars){ return SASHI_BONUS[stars-1]; }
+  // ボーナス倍率の表示（0.9 / 1.0 / 1.1 / 1.25 / 1.5）
+  function bonusText(b){ return (Math.round(b*100) % 10 === 0) ? b.toFixed(1) : b.toFixed(2); }
+
   function fmt(n){ return Math.floor(n).toLocaleString("ja-JP"); }
 
   // ===== トースト =====
@@ -405,12 +449,15 @@
   function ship(i) {
     var barn = state.barns[i];
     if (!barn || !barn.cow || barn.cow.growth < 100) return;
-    var price = shipPriceFor(barn.cow);
     var rar = rarityByKey(barn.cow.rarity);
+    // サシ度を抽選（開けてびっくり）。基本×レア×セリ の積に最後にボーナスを掛ける
+    var stars = rollSashi(barn.cow.rarity);
+    var bonus = sashiBonus(stars);
+    var price = Math.round(BASE_PRICE * rar.mult * state.seriFactor * bonus);
     state.money += price;
     barn.cow = null;
     save(); render();
-    toast(rar.name + "の牛を " + fmt(price) + " G で出荷！ 🎉");
+    showSashi(stars, bonus, price);
   }
   function buyBarn(i) {
     // 次に増やせるおうちのみ購入可（順番に解放）
@@ -646,6 +693,25 @@
   var tickTimer = null;
   function startLoop(){ if (!tickTimer) tickTimer = setInterval(tick, 1000); }
   function stopLoop(){ if (tickTimer) { clearInterval(tickTimer); tickTimer = null; } }
+
+  // ===== サシ度の結果ポップ（出荷時。render は触らないのでアニメは維持される）=====
+  var sashiEl = document.getElementById("sashi");
+  var sTitle = document.getElementById("sTitle");
+  var sEmoji = document.getElementById("sEmoji");
+  var sSashi = document.getElementById("sSashi");
+  var sMoney = document.getElementById("sMoney");
+  document.getElementById("sClose").addEventListener("click", function(){ sashiEl.hidden = true; });
+  function showSashi(stars, bonus, price) {
+    var isMax = stars >= 5;
+    sEmoji.textContent = isMax ? "✨🥩✨" : "🥩";
+    sTitle.textContent = isMax ? "さいこうのサシ！" : "しゅっか！🎉";
+    // サシ度 → 金額 の順で表示
+    sSashi.textContent = "🥩 サシ度 " + repeat("☆", stars) + "！ボーナス×" + bonusText(bonus);
+    sMoney.textContent = "💰 +" + fmt(price) + " G";
+    sashiEl.classList.toggle("sashi-max", isMax);   // ☆5だけ豪華に
+    sashiEl.hidden = false;
+  }
+  function repeat(ch, n){ var s = ""; for (var i=0;i<n;i++) s += ch; return s; }
 
   // ===== おかえり表示（読込・タブ復帰時）=====
   var welcomeEl = document.getElementById("welcome");
