@@ -65,6 +65,7 @@
     touch-action: pan-y;   /* 縦スクロールのみ許可・ピンチ/ダブルタップ無効。複数指のpointerdownを各カードへ個別配送 */
   }
   .slot {
+    position: relative;   /* 紙吹雪オーバーレイの基準 */
     background: rgba(255,255,255,0.72);
     border-radius: 22px;
     padding: 12px 10px;
@@ -192,6 +193,37 @@
     from { transform: scale(1);    filter: drop-shadow(0 0 1px #ffe27a); }
     to   { transform: scale(1.14); filter: drop-shadow(0 0 9px #ffd54a); }
   }
+
+  /* お迎えガチャ演出 */
+  .slot.gacha-gold {   /* すごい/でんせつの告知：ほんのり金色 */
+    background: linear-gradient(160deg,#fff8e3,#ffedc9);
+    box-shadow: 0 0 0 2px #ffe27a, 0 5px 14px rgba(230,180,90,0.35);
+  }
+  @keyframes truck-shake { from { transform: translateX(-3px) rotate(-2deg); } to { transform: translateX(3px) rotate(2deg); } }
+  .s-emoji.gacha-truck { animation: truck-shake .18s ease-in-out infinite alternate; }
+  @keyframes gacha-bounce { 0%,100% { transform: translateY(0) scale(1); } 40% { transform: translateY(-14px) scale(1.06); } }
+  .s-emoji.gacha-silhouette {
+    animation: gacha-bounce .5s ease-in-out infinite;   /* .5s×2周 ≒ 1.0秒で2回バウンド */
+    filter: grayscale(1) brightness(.35);               /* シルエット */
+  }
+  @keyframes gacha-pop { 0% { transform: scale(.3); opacity: .2; } 60% { transform: scale(1.18); } 100% { transform: scale(1); opacity: 1; } }
+  .s-emoji.gacha-pop { animation: gacha-pop .5s ease-out; }
+  .confetti { position: absolute; inset: 0; overflow: hidden; border-radius: 22px; pointer-events: none; }
+  .confetti i {
+    position: absolute; top: -10px; width: 7px; height: 11px; border-radius: 2px;
+    animation: confetti-fall 1.6s ease-in forwards;
+  }
+  @keyframes confetti-fall { to { transform: translateY(220px) rotate(540deg); opacity: 0; } }
+  .legend-pop {
+    position: fixed; left: 50%; top: 34%; z-index: 150;
+    transform: translate(-50%,-50%) scale(.8);
+    background: linear-gradient(135deg,#fff3c4,#ffd6ec); color: #c07a1a;
+    font-weight: 800; font-size: 16px; padding: 12px 20px; border-radius: 999px;
+    box-shadow: 0 6px 20px rgba(220,170,90,.45);
+    opacity: 0; transition: opacity .25s ease, transform .25s ease;
+    pointer-events: none; white-space: nowrap;
+  }
+  .legend-pop.show { opacity: 1; transform: translate(-50%,-50%) scale(1); }
 
   .hint { font-size: 12px; color: #c3b3bc; text-align: center; }
 </style>
@@ -415,8 +447,8 @@
     state.money -= ADOPT_COST;
     var rar = rollRarity();
     barn.cow = { rarity: rar.key, growth: 0 };
-    save(); render();
-    toast(rar.star + " " + rar.name + "の子牛を むかえた！");
+    save();                    // 減算・抽選はここで確定保存（演出中にリロードしても牛は存在）
+    startGacha(i, rar.key);    // 以降は見せ方のみ。render は演出側が呼ぶ
   }
   // なでる手応え：タップ位置の少し上にフローティングテキストを出す
   function floatText(ev, text, small) {
@@ -542,8 +574,9 @@
     var dx = ev.clientX - cx, dy = ev.clientY - cy;
     return (dx * dx + dy * dy) <= radius * radius;
   }
-  // カードの pointerdown：牛の絵文字周辺のみ「なでる」（お金は動かない）
+  // カードの pointerdown：演出中はスキップ / 牛の絵文字周辺のみ「なでる」（お金は動かない）
   function handleCardPet(i, ev) {
+    if (gachaFx[i] && gachaFx[i].phase < 3) { skipGacha(i); return; }   // タップで結果へスキップ
     var n = state.barns.length;
     if (i < n && state.barns[i].cow && withinPetZone(i, ev)) petAt(i, ev);  // テキスト・余白は無反応
   }
@@ -561,6 +594,69 @@
       if (cow) { if (cow.growth >= 100) ship(i); }   // 育て中は非活性・なで無効
       else adopt(i);
     } else if (i === n) buyBarn(i);
+  }
+
+  // ===== お迎えガチャ演出（見せ方のみ。お金・抽選は adopt 時点で確定済み）=====
+  // gachaFx はセーブしない一時状態。表示状態オブジェクトに演出フェーズを反映し、
+  // フェーズ中はビューが不変になるため、毎秒の render がアニメをリセットしない。
+  var gachaFx = {};       // slotIndex -> { phase:1|2|3, rarKey, timer }
+  var adoptCount = 0;     // セッション内のお迎え回数（3回目以降は短縮）
+
+  function startGacha(i, rarKey) {
+    adoptCount++;
+    var fast = adoptCount >= 3;          // 3回目以降は合計約0.5秒に短縮
+    var t1 = fast ? 200 : 800;           // 1) 🚚が揺れる
+    var t2 = fast ? 300 : 1000;          // 2) シルエットが2回バウンド
+    gachaFx[i] = { phase: 1, rarKey: rarKey, timer: null };
+    gachaFx[i].timer = setTimeout(function(){
+      if (!gachaFx[i]) return;
+      gachaFx[i].phase = 2;
+      gachaFx[i].timer = setTimeout(function(){ finishGacha(i); }, t2);
+      render();
+    }, t1);
+    render();
+  }
+  function skipGacha(i) {
+    var fx = gachaFx[i];
+    if (fx && fx.phase < 3) { if (fx.timer) clearTimeout(fx.timer); finishGacha(i); }
+  }
+  function finishGacha(i) {
+    var fx = gachaFx[i];
+    if (!fx) return;
+    if (fx.timer) clearTimeout(fx.timer);
+    var rarKey = fx.rarKey;
+    // 3) ぽんっ✨（0.6秒だけ pop クラスを付けて通常表示へ）
+    gachaFx[i] = { phase: 3, rarKey: rarKey,
+                   timer: setTimeout(function(){ delete gachaFx[i]; render(); }, 600) };
+    var r = slots[i].emoji.getBoundingClientRect();
+    floatText({ clientX: r.left + r.width/2, clientY: r.top + r.height/2 }, "✨", false);
+    if (rarKey === "legend") celebrateLegend(i);
+    render();
+  }
+  function celebrateLegend(i) {
+    // 紙吹雪：カード内オーバーレイ。差分レンダリングが触らない要素なので render と干渉しない
+    var conf = document.createElement("div");
+    conf.className = "confetti";
+    var colors = ["#ffd54a", "#ff9ec4", "#a0d8ff", "#b6f0c8"];
+    for (var k=0;k<12;k++){
+      var p = document.createElement("i");
+      p.style.left = (5 + Math.random()*90) + "%";
+      p.style.animationDelay = (Math.random()*0.4).toFixed(2) + "s";
+      p.style.background = colors[k % colors.length];
+      conf.appendChild(p);
+    }
+    slots[i].slot.appendChild(conf);
+    setTimeout(function(){ if (conf.parentNode) conf.parentNode.removeChild(conf); }, 2200);
+    // 小ポップ
+    var pop = document.createElement("div");
+    pop.className = "legend-pop";
+    pop.textContent = "👑 でんせつの子がやってきた！";
+    document.body.appendChild(pop);
+    requestAnimationFrame(function(){ pop.classList.add("show"); });
+    setTimeout(function(){
+      pop.classList.remove("show");
+      setTimeout(function(){ if (pop.parentNode) pop.parentNode.removeChild(pop); }, 300);
+    }, 1800);
   }
 
   // ===== 表示状態の算出（純粋関数）: state → 1スロット分の表示プロパティ =====
@@ -623,9 +719,34 @@
       btnText: "🔒 " + fmt(BARN_PRICES[i-1]) + "G"
     };
   }
+  // ガチャ演出中のビュー。フェーズ中は値が不変なので、毎秒の render では差分ゼロ＝
+  // DOM書き換えが起きず、CSSアニメーション（揺れ・バウンド）がリセットされない。
+  function viewGacha(fx, barn) {
+    if (fx.phase === 3) {
+      var v = viewCow(barn);
+      v.emojiCls += " gacha-pop";   // ぽんっ（一度きりのCSSアニメ。0.6秒後にfx解除で外れる）
+      return v;
+    }
+    // すごい/でんせつはシルエット中だけ金色の告知
+    var gold = fx.phase === 2 && (fx.rarKey === "great" || fx.rarKey === "legend");
+    return {
+      slotCls: gold ? "slot gacha-gold" : "slot", cursor: "pointer",
+      topCls: "s-top", topText: "おむかえ中…",
+      emojiCls: fx.phase === 1 ? "s-emoji gacha-truck" : "s-emoji gacha-silhouette",
+      emojiSize: "56px",
+      emojiText: fx.phase === 1 ? "🚚" : "🐄",
+      midCls: "s-mid plain", midText: "だれかな…？",
+      barCls: "s-bar hidden", fillWidth: "0%",
+      btnCls: "s-btn", btnDisabled: true, btnText: "わくわく…"
+    };
+  }
   function computeSlotView(i) {
     var n = state.barns.length;
-    if (i < n) return state.barns[i].cow ? viewCow(state.barns[i]) : viewEmpty();
+    if (i < n) {
+      var barn = state.barns[i];
+      if (barn.cow && gachaFx[i]) return viewGacha(gachaFx[i], barn);
+      return barn.cow ? viewCow(barn) : viewEmpty();
+    }
     if (i === n && i < MAX_BARNS) return viewUnlockable(i);
     return viewLocked(i);
   }
