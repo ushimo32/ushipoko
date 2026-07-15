@@ -852,6 +852,7 @@
     var lines = [];
     if (newlyShippable > 0) lines.push("🎀 出荷できるようになった子：" + newlyShippable + "頭");
     if (grownCount > 0) lines.push("🌱 育った子：" + grownCount + "頭（あわせて +" + Math.round(totalGain) + "%）");
+    if (lines.length === 0) lines.push("🐄 みんな元気にまってたよ");   // 変化なしの長期離席あいさつ
     wLines.innerHTML = "";
     for (var i=0;i<lines.length;i++){
       var d = document.createElement("div");
@@ -882,7 +883,10 @@
       if (gain >= 1) { grownCount++; totalGain += gain; }
       if (!sp.shippable && cow.growth >= 100) newlyShippable++;
     }
-    if (awayMs >= 60000 && (grownCount > 0 || newlyShippable > 0)) {
+    // 変化ありなら60秒以上で表示。変化なしでも12時間以上の長期離席なら挨拶する
+    var LONG_AWAY_MS = 12 * 60 * 60 * 1000;
+    var changed = grownCount > 0 || newlyShippable > 0;
+    if (awayMs >= 60000 && (changed || awayMs >= LONG_AWAY_MS)) {
       showWelcome(awayMs, newlyShippable, grownCount, totalGain);
     }
     checkRelief();
