@@ -209,6 +209,7 @@
     touch-action: manipulation;
   }
   .z-cell.done { background: #fff; cursor: pointer; box-shadow: 0 2px 6px rgba(255,170,200,0.25); }
+  .z-cell.none { background: transparent; box-shadow: none; font-size: 14px; opacity: .45; }   /* 達成不可能マス（でんせつ☆1）の空欄 */
   .z-emoji { font-size: 16px; line-height: 1.1; }
   .z-sub { font-size: 8px; font-weight: 800; color: #8a7480; line-height: 1.3; }
   /* 額縁（装飾のみ・効果なし） */
@@ -960,6 +961,15 @@
     }
   }
   function buildZukanCell(idx) {
+    // 抽選確率0%のマス（でんせつ☆1）は永久に埋まらないため空欄にする。
+    // セーブのzukan配列は20要素のまま（該当indexは未使用として残す）
+    var rar = RARITIES[Math.floor(idx / 5)], st = (idx % 5) + 1;
+    if ((SASHI_PROB[rar.key] || SASHI_PROB.normal)[st - 1] === 0) {
+      var sp = document.createElement("div");
+      sp.className = "z-cell none";
+      sp.textContent = "👑";   // 軽い飾りのみ
+      return sp;
+    }
     var cell = state.zukan[idx];
     var d = document.createElement("div");
     if (cell) {
