@@ -44,6 +44,15 @@
     box-shadow: 0 4px 0 rgba(0,0,0,0.07); cursor: pointer; touch-action: manipulation;
   }
   .zukan-btn:active { transform: translateY(calc(-50% + 2px)); box-shadow: 0 2px 0 rgba(0,0,0,0.07); }
+  /* まとめてお迎え（空き2以上のときだけ表示） */
+  .bulk-btn {
+    width: 100%; min-height: 48px; border: none; border-radius: 18px;
+    font-family: inherit; font-weight: 800; font-size: 15px; color: #fff;
+    background: linear-gradient(135deg,#ffb0cf,#ff8fb1);
+    box-shadow: 0 4px 0 rgba(0,0,0,0.08); cursor: pointer; touch-action: manipulation;
+  }
+  .bulk-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 rgba(0,0,0,0.08); }
+  .bulk-btn[hidden] { display: none; }
 
   /* カード共通 */
   .card {
@@ -304,6 +313,8 @@
     </div>
     <div class="seri" id="seri">今日のセリ：—</div>
   </div>
+
+  <button class="bulk-btn" id="bulkBtn" type="button" hidden>まとめてお迎え</button>
 
   <div class="grid" id="grid"></div>
 
@@ -567,8 +578,29 @@
     state.money -= ADOPT_COST;
     var rar = rollRarity();
     barn.cow = { rarity: rar.key, growth: 0, feed: 0 };
+    // めきき（明日実装予定）: お迎え1頭ごとにゲージ加算する箇所。個別・一括で同一扱い。
     save();                    // 減算・抽選はここで確定保存（演出中にリロードしても牛は存在）
     startGacha(i, rar.key);    // 以降は見せ方のみ。render は演出側が呼ぶ
+  }
+  // まとめてお迎え：空きカードに一括お迎え。全額必要（足りなければ1頭も買わない）
+  function adoptAll() {
+    var idxs = [];
+    for (var i=0;i<state.barns.length;i++){ if (!state.barns[i].cow) idxs.push(i); }
+    if (idxs.length < 2) return;   // ボタンは2以上でのみ表示だが二重防御
+    var total = ADOPT_COST * idxs.length;
+    if (state.money < total) { toast("おさいふが たりないよ 💦"); return; }   // 全額必要・1頭も買わない
+    state.money -= total;
+    var rolls = [];
+    for (var k=0;k<idxs.length;k++){
+      var rar = rollRarity();
+      state.barns[idxs[k]].cow = { rarity: rar.key, growth: 0, feed: 0 };
+      rolls.push(rar.key);
+      // めきき（明日実装予定）: 一括でも頭数ぶんゲージ加算する設計。
+      // 個別 adopt と同じく、この1頭ごとの箇所でカウントする。
+    }
+    save();   // 全頭ぶんの減算・抽選を確定保存（演出中にリロードしても牛は存在）
+    // 一括は各カードで同時に短縮版（0.5秒・3連短縮と同じ扱い。個別の🚚タメは省略）
+    for (var m=0;m<idxs.length;m++){ startGacha(idxs[m], rolls[m], true); }
   }
   // なでる手応え：タップ位置の少し上にフローティングテキストを出す
   function floatText(ev, text, small) {
@@ -736,9 +768,9 @@
   var gachaFx = {};       // slotIndex -> { phase:1|2|3, rarKey, timer }
   var adoptCount = 0;     // セッション内のお迎え回数（3回目以降は短縮）
 
-  function startGacha(i, rarKey) {
+  function startGacha(i, rarKey, forceFast) {
     adoptCount++;
-    var fast = adoptCount >= 3;          // 3回目以降は合計約0.5秒に短縮
+    var fast = forceFast || adoptCount >= 3;   // 3回目以降 or 一括お迎えは合計約0.5秒に短縮
     var t1 = fast ? 200 : 800;           // 1) 🚚が揺れる
     var t2 = fast ? 300 : 1000;          // 2) シルエットが2回バウンド
     gachaFx[i] = { phase: 1, rarKey: rarKey, timer: null };
@@ -917,12 +949,23 @@
 
   var moneyEl = document.getElementById("money");
   var seriEl = document.getElementById("seri");
-  var prevMoneyText = null, prevSeriText = null;
+  var bulkBtn = document.getElementById("bulkBtn");
+  bulkBtn.addEventListener("click", adoptAll);
+  var prevMoneyText = null, prevSeriText = null, prevBulkShow = null, prevBulkText = null;
   function render() {
     var moneyText = fmt(state.money) + " G";
     if (moneyText !== prevMoneyText) { moneyEl.textContent = moneyText; prevMoneyText = moneyText; }
     var seriText = "今日のセリ：" + seriLabel(state.seriFactor) + "（×" + state.seriFactor.toFixed(2) + "）";
     if (seriText !== prevSeriText) { seriEl.textContent = seriText; prevSeriText = seriText; }
+    // まとめてお迎え：空きカードが2以上のときだけ表示（差分更新）
+    var empties = 0;
+    for (var b=0;b<state.barns.length;b++){ if (!state.barns[b].cow) empties++; }
+    var showBulk = empties >= 2;
+    if (showBulk !== prevBulkShow) { bulkBtn.hidden = !showBulk; prevBulkShow = showBulk; }
+    if (showBulk) {
+      var bulkText = "まとめてお迎え（" + empties + "頭）" + fmt(ADOPT_COST * empties) + "G";
+      if (bulkText !== prevBulkText) { bulkBtn.textContent = bulkText; prevBulkText = bulkText; }
+    }
     for (var i=0;i<MAX_BARNS;i++) applySlotView(i, computeSlotView(i));
   }
 
@@ -1190,7 +1233,7 @@
     document.addEventListener("touchend", function(e){
       // 活性ボタン上のタップのみ除外（確定操作の click を殺さない）。
       // disabled な「育て中」ボタンは抜け道になるので抑止対象に含める。
-      var btn = e.target && e.target.closest ? e.target.closest(".s-btn, .feed-btn") : null;
+      var btn = e.target && e.target.closest ? e.target.closest(".s-btn, .feed-btn, .bulk-btn, .zukan-btn") : null;
       if (btn && !btn.disabled) { lastTouchEnd = Date.now(); return; }
       var now = Date.now();
       if (now - lastTouchEnd < 350) e.preventDefault();   // 直前タップから350ms未満=ダブルタップ
