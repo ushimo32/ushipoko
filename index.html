@@ -219,6 +219,24 @@
   #frameMenu { z-index: 210; }   /* ずかんの上に重ねる */
   .z-new { color: #7a5fb0; background: #f1ecff; }
 
+  /* ごはんボタン（カード右上・現在のごはん表示を兼ねる） */
+  .feed-btn {
+    position: absolute; top: 6px; right: 6px; z-index: 5;
+    min-width: 40px; height: 40px; padding: 0 6px;
+    border: none; border-radius: 999px;
+    font-family: inherit; font-size: 16px; line-height: 1;
+    cursor: pointer; touch-action: manipulation;
+    background: #f3edf1; box-shadow: 0 2px 6px rgba(200,160,180,0.25);
+  }
+  .feed-btn:active { transform: scale(.92); }
+  .feed-btn.f0 { filter: grayscale(.7); opacity: .75; }          /* ふつう（無料） */
+  .feed-btn.f1 { background: #fff3df; filter: none; opacity: 1; } /* いいごはん */
+  .feed-btn.f2 {                                                  /* さいこうのごはん */
+    background: linear-gradient(135deg,#fff3c4,#ffe9a8);
+    box-shadow: 0 0 0 2px #ffe27a inset, 0 2px 6px rgba(230,180,90,0.35);
+    filter: none; opacity: 1; font-size: 13px;
+  }
+
   /* サシ度☆5の豪華演出 */
   .sashi-max .modal-card {
     background: linear-gradient(160deg,#fffaf0,#fff2f8);
@@ -328,6 +346,16 @@
   </div>
 </div>
 
+<div id="feedMenu" class="modal-overlay" hidden>
+  <div class="modal-card">
+    <div class="modal-emoji">🍚</div>
+    <div class="modal-title">ごはんをえらぶ</div>
+    <div class="modal-away" id="feedInfo"></div>
+    <div class="modal-lines" id="feedBtns"></div>
+    <button class="s-btn adopt" id="feedClose" type="button">とじる</button>
+  </div>
+</div>
+
 <script>
 (function () {
   "use strict";
@@ -344,6 +372,13 @@
   var MAX_BARNS = 6;                     // 牛房は最大6つ
   // 2つ目以降の牛房の解放価格（index i の牛房 = BARN_PRICES[i-1]）
   var BARN_PRICES = [80000, 200000, 500000, 1200000, 3000000];
+  // ごはんグレード（牛1頭ごとの消費型。出荷でリセット＝新しい牛は feed:0）
+  // さいこうのごはんは成長+60%に加え、出荷時のサシ度抽選を1段階優遇（☆4以下なら+1）
+  var FEED_DEFS = [
+    { name: "ふつう",           price: 0,      mult: 1.0, icon: "🍚" },
+    { name: "いいごはん",       price: 20000,  mult: 1.3, icon: "🍚" },
+    { name: "さいこうのごはん", price: 100000, mult: 1.6, icon: "✨🍚" }
+  ];
 
   // レア度定義（順に判定）
   var RARITIES = [
@@ -386,7 +421,8 @@
   function clampGrowth(g){ return Math.max(0, Math.min(100, g)); }
   function normCow(c){
     if (c && typeof c === "object" && typeof c.growth === "number" && c.rarity) {
-      return { rarity:c.rarity, growth:clampGrowth(c.growth) };   // 旧セーブの lastTick は無視（成長は state.lastUpdate 基準）
+      // 旧セーブの lastTick は無視（成長は state.lastUpdate 基準）。feed 欠落は 0 に正規化
+      return { rarity:c.rarity, growth:clampGrowth(c.growth), feed: Math.min(2, Math.max(0, c.feed|0)) };
     }
     return null;
   }
@@ -524,7 +560,7 @@
     if (state.money < ADOPT_COST) { toast("おさいふが たりないよ 💦"); return; }
     state.money -= ADOPT_COST;
     var rar = rollRarity();
-    barn.cow = { rarity: rar.key, growth: 0 };
+    barn.cow = { rarity: rar.key, growth: 0, feed: 0 };
     save();                    // 減算・抽選はここで確定保存（演出中にリロードしても牛は存在）
     startGacha(i, rar.key);    // 以降は見せ方のみ。render は演出側が呼ぶ
   }
@@ -562,6 +598,8 @@
     var rar = rarityByKey(barn.cow.rarity);
     // サシ度を抽選（開けてびっくり）。基本×レア×セリ の積に最後にボーナスを掛ける
     var stars = rollSashi(barn.cow.rarity);
+    // さいこうのごはん：抽選結果への後処理で1段階優遇（☆4以下なら+1。確率テーブルは不変）
+    if ((barn.cow.feed|0) === 2 && stars < 5) stars++;
     var bonus = sashiBonus(stars);
     var price = Math.round(BASE_PRICE * rar.mult * state.seriFactor * bonus);
     state.money += price;
@@ -623,29 +661,33 @@
       var fill = document.createElement("div"); fill.className = "s-fill";
       bar.appendChild(fill);
       var btn = document.createElement("button"); btn.className = "s-btn"; btn.type = "button";
+      // ごはんボタン（カード右上・牛がいる時だけ表示。現在のごはん表示を兼ねる）
+      var feed = document.createElement("button"); feed.className = "feed-btn"; feed.type = "button";
+      feed.textContent = "🍚"; feed.style.display = "none";
 
       slot.appendChild(top); slot.appendChild(emoji); slot.appendChild(mid);
-      slot.appendChild(bar); slot.appendChild(btn);
+      slot.appendChild(bar); slot.appendChild(btn); slot.appendChild(feed);
       grid.appendChild(slot);
 
-      (function(idx, btnEl){
+      (function(idx, btnEl, feedEl){
         // なでる（お金が動かない）は即応性重視で pointerdown。
         // 絵文字周辺のみ反応するのでスクロール起点の誤反応は実害なし（+0.5%のみ）。
         slot.addEventListener("pointerdown", function(ev){
-          if (btnEl.contains(ev.target)) return;
+          if (btnEl.contains(ev.target) || feedEl.contains(ev.target)) return;
           handleCardPet(idx, ev);
         });
         // お金が動く操作（迎える/増やす）は click。
         // pointerdown だとスクロール起点の接触で誤購入するため、静止タップの click に限定。
         slot.addEventListener("click", function(ev){
-          if (btnEl.contains(ev.target)) return;   // ボタンは専用ハンドラに任せる
+          if (btnEl.contains(ev.target) || feedEl.contains(ev.target)) return;   // ボタンは専用ハンドラに任せる
           handleCardBuy(idx);
         });
         // ボタンは専用動作（出荷等の確定操作なので click のまま）。
         btn.addEventListener("click", function(ev){ handleButton(idx, ev); });
-      })(i, btn);
+        feed.addEventListener("click", function(ev){ ev.stopPropagation(); openFeedMenu(idx); });
+      })(i, btn, feed);
 
-      slots.push({ slot:slot, top:top, emoji:emoji, mid:mid, bar:bar, fill:fill, btn:btn });
+      slots.push({ slot:slot, top:top, emoji:emoji, mid:mid, bar:bar, fill:fill, btn:btn, feed:feed });
     }
   }
 
@@ -751,9 +793,12 @@
     var g = Math.min(100, barn.cow.growth);
     var st = growthStage(g);
     var ready = g >= 100;
+    var feed = barn.cow.feed|0;
     return {
       slotCls: "slot", cursor: "pointer",
       topCls: "s-top", topText: st.name,
+      // ごはんボタン＝現在のごはん表示を兼ねる（f0ふつう/f1いい/f2さいこう）
+      feedShow: true, feedCls: "feed-btn f" + feed, feedText: FEED_DEFS[feed].icon,
       // 絵文字は一回り大きく（頭上の演出が指で隠れないサイズ感）
       emojiCls: "s-emoji tap",
       emojiSize: st.small ? "62px" : "76px",
@@ -855,6 +900,10 @@
     if (v.btnCls      !== p.btnCls)      s.btn.className = v.btnCls;
     if (v.btnDisabled !== p.btnDisabled) s.btn.disabled = v.btnDisabled;
     if (v.btnText     !== p.btnText)     s.btn.textContent = v.btnText;
+    // ごはんボタン（feedShow 未定義のビュー＝非表示。非表示中はクラス/文字を書かない）
+    if (!!v.feedShow !== !!p.feedShow)   s.feed.style.display = v.feedShow ? "" : "none";
+    if (v.feedShow && v.feedCls  !== p.feedCls)  s.feed.className = v.feedCls;
+    if (v.feedShow && v.feedText !== p.feedText) s.feed.textContent = v.feedText;
     prevViews[i] = v;
   }
 
@@ -880,7 +929,7 @@
       for (var i=0;i<state.barns.length;i++){
         var cow = state.barns[i].cow;
         if (!cow || cow.growth >= 100) continue;
-        var mult = rarityByKey(cow.rarity).mult;
+        var mult = rarityByKey(cow.rarity).mult * FEED_DEFS[cow.feed|0].mult;   // ごはん倍率は購入時点から残りの成長分に適用
         cow.growth = clampGrowth(cow.growth + (100 / GROW_SECONDS) * mult * seconds);
       }
     }
@@ -1023,6 +1072,48 @@
     toast(FRAME_DEFS[level].name + "を かざった！");
   }
 
+  // ===== ごはんグレード（メニューは開いた時のみ構築。毎秒の render と無関係）=====
+  var feedMenuEl = document.getElementById("feedMenu");
+  var feedInfo = document.getElementById("feedInfo");
+  var feedBtnsEl = document.getElementById("feedBtns");
+  document.getElementById("feedClose").addEventListener("click", function(){ feedMenuEl.hidden = true; });
+  function openFeedMenu(i) {
+    var barn = state.barns[i];
+    if (!barn || !barn.cow) return;
+    var cur = barn.cow.feed|0;
+    feedInfo.textContent = "いまのごはん：" + FEED_DEFS[cur].name + " " + FEED_DEFS[cur].icon;
+    feedBtnsEl.innerHTML = "";
+    for (var g=0; g<FEED_DEFS.length; g++){
+      (function(grade){
+        var def = FEED_DEFS[grade];
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "s-btn buy";
+        b.disabled = grade <= cur;   // 上位への変更のみ可（下位・同一は不可）
+        b.textContent = def.icon + " " + def.name
+          + (def.price ? " " + fmtMan(def.price) + "G" : "（無料）")
+          + (grade === cur ? "（たべてる）" : grade < cur ? "" : "");
+        var effects = grade === 2 ? "成長+60%・サシ優遇" : grade === 1 ? "成長+30%" : "";
+        if (effects) b.textContent += "｜" + effects;
+        b.addEventListener("click", function(){ buyFeed(i, grade); });
+        feedBtnsEl.appendChild(b);
+      })(g);
+    }
+    feedMenuEl.hidden = false;
+  }
+  function buyFeed(i, grade) {
+    var barn = state.barns[i];
+    if (!barn || !barn.cow) return;
+    if (grade <= (barn.cow.feed|0)) return;   // 下位への変更は不可
+    var price = FEED_DEFS[grade].price;       // 差額ではなく全額
+    if (state.money < price) { toast("おさいふが たりないよ 💦"); return; }
+    state.money -= price;
+    barn.cow.feed = grade;
+    save(); render();
+    feedMenuEl.hidden = true;
+    toast(FEED_DEFS[grade].name + "に かえた！🍚");
+  }
+
   // ===== おかえり表示（読込・タブ復帰時）=====
   var welcomeEl = document.getElementById("welcome");
   var wAway = document.getElementById("wAway");
@@ -1091,7 +1182,7 @@
     document.addEventListener("touchend", function(e){
       // 活性ボタン上のタップのみ除外（確定操作の click を殺さない）。
       // disabled な「育て中」ボタンは抜け道になるので抑止対象に含める。
-      var btn = e.target && e.target.closest ? e.target.closest(".s-btn") : null;
+      var btn = e.target && e.target.closest ? e.target.closest(".s-btn, .feed-btn") : null;
       if (btn && !btn.disabled) { lastTouchEnd = Date.now(); return; }
       var now = Date.now();
       if (now - lastTouchEnd < 350) e.preventDefault();   // 直前タップから350ms未満=ダブルタップ
