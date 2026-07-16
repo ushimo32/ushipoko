@@ -84,6 +84,9 @@
     touch-action: manipulation;   /* ダブルタップズーム無効化 */
   }
   .slot.locked { background: rgba(246,241,245,0.6); box-shadow: none; }
+  /* 押せるカード（空き／解放可）＝カード全体を押下でぷにっと縮む。購入トリガーは click のまま */
+  .slot.pressable { transition: transform .1s ease; }
+  .slot.pressable:active { transform: scale(0.97); }
 
   /* レア度色（共通）*/
   .r-normal { background:#eef3f7; color:#8aa0b2; }
@@ -105,7 +108,7 @@
     filter: drop-shadow(0 6px 8px rgba(180,150,200,0.3));
   }
   .s-emoji.tap:active { transform: scale(0.86) rotate(-5deg); }
-  .s-emoji.plus { color: #ff9ec4; font-weight: 800; cursor: pointer; }
+  .s-emoji.plus { color: #ff9ec4; font-weight: 800; cursor: pointer; text-shadow: 0 2px 5px rgba(255,140,180,0.45); }   /* 「＋」を押せる見た目に（浮遊シャドウ） */
   .s-emoji.lock { opacity: .5; filter: grayscale(.3); }
 
   .s-mid {
@@ -820,7 +823,7 @@
   // 空きおうち → 「＋」で迎える
   function viewEmpty() {
     return {
-      slotCls: "slot", cursor: "pointer",
+      slotCls: "slot pressable", cursor: "pointer",   // カード全体が押せる（押下でぷにっと）
       topCls: "s-top muted", topText: "あきべや",
       emojiCls: "s-emoji plus", emojiSize: "56px", emojiText: "＋",
       midCls: "s-mid plain", midText: "子牛を迎えよう",
@@ -832,7 +835,7 @@
   // 次に増やせるおうち（🔒＋価格・購入可）
   function viewUnlockable(i) {
     return {
-      slotCls: "slot locked", cursor: "pointer",
+      slotCls: "slot locked pressable", cursor: "pointer",   // カード全体が押せる（押下でぷにっと）
       topCls: "s-top muted", topText: "おうちを増やす",
       emojiCls: "s-emoji plus", emojiSize: "44px", emojiText: "🔒",
       midCls: "s-mid plain", midText: "ここを増やせる",
