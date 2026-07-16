@@ -219,13 +219,16 @@
   #frameMenu { z-index: 210; }   /* ずかんの上に重ねる */
   .z-new { color: #7a5fb0; background: #f1ecff; }
 
-  /* ごはんボタン（カード右上・現在のごはん表示を兼ねる） */
+  /* 出荷ボタン＋ごはんボタンの行（横並びで分離。ラベルと重ならない） */
+  .s-btnrow { width: 100%; display: flex; gap: 6px; align-items: stretch; }
+  .s-btnrow .s-btn { flex: 1 1 auto; min-width: 0; }
+  /* ごはんボタン（出荷ボタンの右横・現在のごはん表示を兼ねる） */
   .feed-btn {
-    position: absolute; top: 6px; right: 6px; z-index: 5;
-    min-width: 40px; height: 40px; padding: 0 6px;
-    border: none; border-radius: 999px;
+    flex: 0 0 auto; width: 44px; min-height: 44px; padding: 0;
+    border: none; border-radius: 14px;
     font-family: inherit; font-size: 16px; line-height: 1;
     cursor: pointer; touch-action: manipulation;
+    display: flex; align-items: center; justify-content: center;
     background: #f3edf1; box-shadow: 0 2px 6px rgba(200,160,180,0.25);
   }
   .feed-btn:active { transform: scale(.92); }
@@ -664,9 +667,11 @@
       // ごはんボタン（カード右上・牛がいる時だけ表示。現在のごはん表示を兼ねる）
       var feed = document.createElement("button"); feed.className = "feed-btn"; feed.type = "button";
       feed.textContent = "🍚"; feed.style.display = "none";
+      var btnrow = document.createElement("div"); btnrow.className = "s-btnrow";
+      btnrow.appendChild(btn); btnrow.appendChild(feed);   // 出荷ボタンの右横に🍚
 
       slot.appendChild(top); slot.appendChild(emoji); slot.appendChild(mid);
-      slot.appendChild(bar); slot.appendChild(btn); slot.appendChild(feed);
+      slot.appendChild(bar); slot.appendChild(btnrow);
       grid.appendChild(slot);
 
       (function(idx, btnEl, feedEl){
