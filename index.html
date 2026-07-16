@@ -53,6 +53,24 @@
   }
   .bulk-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 rgba(0,0,0,0.08); }
   .bulk-btn[hidden] { display: none; }
+  /* めきき（天井ゲージ） */
+  .mekiki {
+    font-size: 12px; font-weight: 800; color: #8a7fb0; text-align: center;
+    padding: 4px 8px 0; line-height: 1.4;
+  }
+  .mekiki.shine {
+    color: #d98a2b;
+    animation: mekiki-shine .9s ease-in-out infinite alternate;
+  }
+  @keyframes mekiki-shine {
+    from { opacity: .72; text-shadow: none; }
+    to   { opacity: 1;   text-shadow: 0 0 8px #ffd54a; }
+  }
+  /* お迎えボタンの光る印（めきき満タン時） */
+  .s-btn.mekiki-glow, .bulk-btn.mekiki-glow {
+    box-shadow: 0 0 0 2px #ffe27a, 0 4px 0 rgba(0,0,0,0.08);
+    animation: mekiki-shine .9s ease-in-out infinite alternate;
+  }
 
   /* カード共通 */
   .card {
@@ -312,6 +330,7 @@
       <span class="money-val" id="money">0 G</span>
     </div>
     <div class="seri" id="seri">今日のセリ：—</div>
+    <div class="mekiki" id="mekiki">めきき 👀 0/100</div>
   </div>
 
   <button class="bulk-btn" id="bulkBtn" type="button" hidden>まとめてお迎え</button>
@@ -386,6 +405,7 @@
   var GROW_SECONDS = 600;               // 基本 約10分で100%
   var PET_GAIN = 0.5;                    // なでる：+0.5%
   var PET_COOLDOWN = 500;               // 0.5秒クールダウン
+  var MEKIKI_MAX = 100;                  // めきき天井：お迎え100回で確定でんせつ
   var MAX_BARNS = 6;                     // 牛房は最大6つ
   // 2つ目以降の牛房の解放価格（index i の牛房 = BARN_PRICES[i-1]）
   var BARN_PRICES = [80000, 200000, 500000, 1200000, 3000000];
@@ -415,8 +435,10 @@
     seriDate: null,
     seriFactor: 1.0,
     lastUpdate: 0,                         // 成長を時刻差分で計算する基準（エポックms）
-    zukan: normZukan(null)                 // 牛ずかん：レア度4×サシ度5=固定20マス（index=レア度番号×5+☆-1）
+    zukan: normZukan(null),                // 牛ずかん：レア度4×サシ度5=固定20マス（index=レア度番号×5+☆-1）
+    mekiki: 0                              // めききゲージ（0-100）。100でお迎えが確定でんせつ
   };
+  function normMekiki(v){ return Math.min(MEKIKI_MAX, Math.max(0, (typeof v === "number" ? v : 0) | 0)); }
 
   // ずかんの正規化：固定20要素。各マスは null（未達成）か
   // { first:初達成エポックms, count:達成回数, best:最高価格, frame:額縁0-3 }
@@ -462,6 +484,7 @@
           // lastUpdate が無い旧セーブは now で初期化（過去分の遡及付与はしない）
           state.lastUpdate = (typeof s.lastUpdate === "number") ? s.lastUpdate : Date.now();
           state.zukan = normZukan(s.zukan);   // 旧セーブ（zukanなし）は空ずかん。過去の出荷は遡及しない
+          state.mekiki = normMekiki(s.mekiki); // 旧セーブ（mekikiなし）は0
           return;
         }
         // v2キーはあるが形が不正 → v1 に戻さず初期化（下へ抜ける）
@@ -477,6 +500,7 @@
             state.seriFactor = o.seriFactor || 1.0;
             state.lastUpdate = Date.now();   // 遡及なしで移行
             state.zukan = normZukan(null);
+            state.mekiki = 0;
             save();  // 新キーへ保存（以降は新形式で読み込み）
             try { localStorage.removeItem(OLD_KEY); } catch (e2) {}   // 移行完了。旧キーを掃除
             return;
@@ -491,6 +515,7 @@
     state.seriFactor = 1.0;
     state.lastUpdate = Date.now();
     state.zukan = normZukan(null);
+    state.mekiki = 0;
   }
 
   // ===== セリ係数（日替わり 0.8〜1.2・全牛房共通）=====
@@ -571,16 +596,28 @@
   }
 
   // ===== アクション（すべて牛房単位）=====
+  // お迎え1頭ぶんのレア度抽選＋めききゲージ処理。
+  // ・満タン(100)なら確定でんせつ＋ゲージ0リセット（byMekiki=true）
+  // ・そうでなければ通常抽選し、お迎え1回ぶん +1（最大100で止まる）。
+  //   自然でんせつでもゲージはリセットしない（天井は保険）。
+  function rollAdoptRarity() {
+    if (state.mekiki >= MEKIKI_MAX) {
+      state.mekiki = 0;
+      return { rar: rarityByKey("legend"), byMekiki: true };
+    }
+    var rar = rollRarity();
+    if (state.mekiki < MEKIKI_MAX) state.mekiki = Math.min(MEKIKI_MAX, state.mekiki + 1);
+    return { rar: rar, byMekiki: false };
+  }
   function adopt(i) {
     var barn = state.barns[i];
     if (!barn || barn.cow) return;
     if (state.money < ADOPT_COST) { toast("おさいふが たりないよ 💦"); return; }
     state.money -= ADOPT_COST;
-    var rar = rollRarity();
-    barn.cow = { rarity: rar.key, growth: 0, feed: 0 };
-    // めきき（明日実装予定）: お迎え1頭ごとにゲージ加算する箇所。個別・一括で同一扱い。
+    var res = rollAdoptRarity();
+    barn.cow = { rarity: res.rar.key, growth: 0, feed: 0 };
     save();                    // 減算・抽選はここで確定保存（演出中にリロードしても牛は存在）
-    startGacha(i, rar.key);    // 以降は見せ方のみ。render は演出側が呼ぶ
+    startGacha(i, res.rar.key, false, res.byMekiki);   // 以降は見せ方のみ。render は演出側が呼ぶ
   }
   // まとめてお迎え：空きカードに一括お迎え。全額必要（足りなければ1頭も買わない）
   function adoptAll() {
@@ -592,15 +629,14 @@
     state.money -= total;
     var rolls = [];
     for (var k=0;k<idxs.length;k++){
-      var rar = rollRarity();
-      state.barns[idxs[k]].cow = { rarity: rar.key, growth: 0, feed: 0 };
-      rolls.push(rar.key);
-      // めきき（明日実装予定）: 一括でも頭数ぶんゲージ加算する設計。
-      // 個別 adopt と同じく、この1頭ごとの箇所でカウントする。
+      // 1頭ごとに rollAdoptRarity（めきき加算/発動は先頭の1頭で消費され、以降は通常＋加算）
+      var res = rollAdoptRarity();
+      state.barns[idxs[k]].cow = { rarity: res.rar.key, growth: 0, feed: 0 };
+      rolls.push(res);
     }
     save();   // 全頭ぶんの減算・抽選を確定保存（演出中にリロードしても牛は存在）
     // 一括は各カードで同時に短縮版（0.5秒・3連短縮と同じ扱い。個別の🚚タメは省略）
-    for (var m=0;m<idxs.length;m++){ startGacha(idxs[m], rolls[m], true); }
+    for (var m=0;m<idxs.length;m++){ startGacha(idxs[m], rolls[m].rar.key, true, rolls[m].byMekiki); }
   }
   // なでる手応え：タップ位置の少し上にフローティングテキストを出す
   function floatText(ev, text, small) {
@@ -768,12 +804,12 @@
   var gachaFx = {};       // slotIndex -> { phase:1|2|3, rarKey, timer }
   var adoptCount = 0;     // セッション内のお迎え回数（3回目以降は短縮）
 
-  function startGacha(i, rarKey, forceFast) {
+  function startGacha(i, rarKey, forceFast, byMekiki) {
     adoptCount++;
     var fast = forceFast || adoptCount >= 3;   // 3回目以降 or 一括お迎えは合計約0.5秒に短縮
     var t1 = fast ? 200 : 800;           // 1) 🚚が揺れる
     var t2 = fast ? 300 : 1000;          // 2) シルエットが2回バウンド
-    gachaFx[i] = { phase: 1, rarKey: rarKey, timer: null };
+    gachaFx[i] = { phase: 1, rarKey: rarKey, byMekiki: !!byMekiki, timer: null };
     gachaFx[i].timer = setTimeout(function(){
       if (!gachaFx[i]) return;
       gachaFx[i].phase = 2;
@@ -790,16 +826,16 @@
     var fx = gachaFx[i];
     if (!fx) return;
     if (fx.timer) clearTimeout(fx.timer);
-    var rarKey = fx.rarKey;
+    var rarKey = fx.rarKey, byMekiki = fx.byMekiki;
     // 3) ぽんっ✨（0.6秒だけ pop クラスを付けて通常表示へ）
-    gachaFx[i] = { phase: 3, rarKey: rarKey,
+    gachaFx[i] = { phase: 3, rarKey: rarKey, byMekiki: byMekiki,
                    timer: setTimeout(function(){ delete gachaFx[i]; render(); }, 600) };
     var r = slots[i].emoji.getBoundingClientRect();
     floatText({ clientX: r.left + r.width/2, clientY: r.top + r.height/2 }, "✨", false);
-    if (rarKey === "legend") celebrateLegend(i);
+    if (rarKey === "legend") celebrateLegend(i, byMekiki);
     render();
   }
-  function celebrateLegend(i) {
+  function celebrateLegend(i, byMekiki) {
     // 紙吹雪：カード内オーバーレイ。差分レンダリングが触らない要素なので render と干渉しない
     var conf = document.createElement("div");
     conf.className = "confetti";
@@ -813,10 +849,11 @@
     }
     slots[i].slot.appendChild(conf);
     setTimeout(function(){ if (conf.parentNode) conf.parentNode.removeChild(conf); }, 2200);
-    // 小ポップ
+    // 小ポップ（めきき確定時は一言追加）
     var pop = document.createElement("div");
     pop.className = "legend-pop";
-    pop.textContent = "👑 でんせつの子がやってきた！";
+    var l1 = document.createElement("div"); l1.textContent = "👑 でんせつの子がやってきた！"; pop.appendChild(l1);
+    if (byMekiki) { var l2 = document.createElement("div"); l2.textContent = "👀 めききが当たった！"; l2.style.fontSize = "13px"; l2.style.marginTop = "2px"; pop.appendChild(l2); }
     document.body.appendChild(pop);
     requestAnimationFrame(function(){ pop.classList.add("show"); });
     setTimeout(function(){
@@ -860,8 +897,10 @@
       emojiCls: "s-emoji plus", emojiSize: "56px", emojiText: "＋",
       midCls: "s-mid plain", midText: "子牛を迎えよう",
       barCls: "s-bar hidden", fillWidth: "0%",
-      btnCls: "s-btn adopt", btnDisabled: false,   // 不足時は adopt() がトーストで案内
-      btnText: "迎える " + fmt(ADOPT_COST) + "G"
+      // めきき満タン時はお迎えボタンに光る印
+      btnCls: state.mekiki >= MEKIKI_MAX ? "s-btn adopt mekiki-glow" : "s-btn adopt",
+      btnDisabled: false,   // 不足時は adopt() がトーストで案内
+      btnText: (state.mekiki >= MEKIKI_MAX ? "✨迎える " : "迎える ") + fmt(ADOPT_COST) + "G"
     };
   }
   // 次に増やせるおうち（🔒＋価格・購入可）
@@ -949,15 +988,24 @@
 
   var moneyEl = document.getElementById("money");
   var seriEl = document.getElementById("seri");
+  var mekikiEl = document.getElementById("mekiki");
   var bulkBtn = document.getElementById("bulkBtn");
   bulkBtn.addEventListener("click", adoptAll);
   var prevMoneyText = null, prevSeriText = null, prevBulkShow = null, prevBulkText = null;
+  var prevMekikiText = null, prevMekikiShine = null;
   function render() {
     var moneyText = fmt(state.money) + " G";
     if (moneyText !== prevMoneyText) { moneyEl.textContent = moneyText; prevMoneyText = moneyText; }
     var seriText = "今日のセリ：" + seriLabel(state.seriFactor) + "（×" + state.seriFactor.toFixed(2) + "）";
     if (seriText !== prevSeriText) { seriEl.textContent = seriText; prevSeriText = seriText; }
-    // まとめてお迎え：空きカードが2以上のときだけ表示（差分更新）
+    // めきき表示（満タンで光る告知に切替。差分更新）
+    var full = state.mekiki >= MEKIKI_MAX;
+    var mekikiText = full
+      ? "👀 めききが光っている！つぎのお迎えででんせつの子をみつけられる"
+      : "めきき 👀 " + state.mekiki + "/100";
+    if (mekikiText !== prevMekikiText) { mekikiEl.textContent = mekikiText; prevMekikiText = mekikiText; }
+    if (full !== prevMekikiShine) { mekikiEl.classList.toggle("shine", full); prevMekikiShine = full; }
+    // まとめてお迎え：空きカードが2以上のときだけ表示（差分更新）。満タン中は光る印
     var empties = 0;
     for (var b=0;b<state.barns.length;b++){ if (!state.barns[b].cow) empties++; }
     var showBulk = empties >= 2;
@@ -965,6 +1013,7 @@
     if (showBulk) {
       var bulkText = "まとめてお迎え（" + empties + "頭）" + fmt(ADOPT_COST * empties) + "G";
       if (bulkText !== prevBulkText) { bulkBtn.textContent = bulkText; prevBulkText = bulkText; }
+      bulkBtn.classList.toggle("mekiki-glow", full);
     }
     for (var i=0;i<MAX_BARNS;i++) applySlotView(i, computeSlotView(i));
   }
