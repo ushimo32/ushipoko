@@ -650,9 +650,9 @@
       osc.connect(g); g.connect(masterGain);
       osc.start(t0); osc.stop(t0 + 0.14);
     },
-    coin: function(){                    // 出荷：ちゃりん
-      note(988, 0, 0.08, "square", 0.5);
-      note(1319, 0.06, 0.20, "square", 0.5);
+    coin: function(){                    // 出荷：ちゃりん（上昇形の明るい2音・レジ/硬貨風）
+      note(880, 0, 0.07, "sine", 0.5);        // A5
+      note(1318, 0.055, 0.14, "sine", 0.68);  // E6（完全5度上・2音目をわずかに強く）
     },
     sparkle: function(){                 // ☆5サシ：きらーん（明るいアルペジオ）
       [784, 988, 1175, 1568].forEach(function(f, i){ note(f, i * 0.06, 0.16, "triangle", 0.5); });
@@ -663,6 +663,19 @@
     },
     fanfare: function(){                 // でんせつ登場：短いファンファーレ
       [523, 659, 784, 1047].forEach(function(f, i){ note(f, i * 0.11, 0.22, "square", 0.45); });
+    },
+    moo: function(){                     // 出荷可能の牛をなでた：もー（低め・ゆるく下降・控えめ）
+      if (!audioCtx) return;
+      var t0 = audioCtx.currentTime;
+      var osc = audioCtx.createOscillator(), g = audioCtx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(250, t0);
+      osc.frequency.exponentialRampToValueAtTime(200, t0 + 0.24);   // 250→200Hz ゆるく下降
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.5, t0 + 0.03);          // 控えめ
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.27);
+      osc.connect(g); g.connect(masterGain);
+      osc.start(t0); osc.stop(t0 + 0.3);
     },
     tap: function(){                     // おうち/ごはん購入：こつん
       note(300, 0, 0.05, "sine", 0.7);
@@ -739,13 +752,17 @@
     var barn = state.barns[i];
     if (!barn || !barn.cow) return;
     var cow = barn.cow;
-    if (cow.growth >= 100) { floatText(ev, "しゅっか できるよ 🎀", true); return; }
     var now = Date.now();
-    if (now - (barn.lastPet || 0) < PET_COOLDOWN) {   // クールダウン中も無反応にしない
+    if (now - (barn.lastPet || 0) < PET_COOLDOWN) {   // クールダウン中も無反応にしない（100%でも同じ0.5秒）
       floatText(ev, "💤", true);
       return;
     }
     barn.lastPet = now;
+    if (cow.growth >= 100) {   // 出荷可能：成長させず、鳴き声＋💕のかわいい返事だけ返す
+      floatText(ev, "💕", false);
+      play("moo");
+      return;
+    }
     cow.growth = clampGrowth(cow.growth + PET_GAIN);
     floatText(ev, "+" + PET_GAIN + "% 💕", false);
     play("poko");
