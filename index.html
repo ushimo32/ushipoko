@@ -44,6 +44,14 @@
     box-shadow: 0 4px 0 rgba(0,0,0,0.07); cursor: pointer; touch-action: manipulation;
   }
   .zukan-btn:active { transform: translateY(calc(-50% + 2px)); box-shadow: 0 2px 0 rgba(0,0,0,0.07); }
+  .sound-btn {
+    position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+    width: 44px; height: 44px; border: none; border-radius: 14px; padding: 0;
+    font-size: 20px; line-height: 1; cursor: pointer; touch-action: manipulation;
+    background: #f3edf1; box-shadow: 0 3px 0 rgba(0,0,0,0.06);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .sound-btn:active { transform: translateY(calc(-50% + 2px)); box-shadow: 0 1px 0 rgba(0,0,0,0.06); }
   /* まとめてお迎え（空き2以上のときだけ表示） */
   .bulk-btn {
     width: 100%; min-height: 48px; border: none; border-radius: 18px;
@@ -320,6 +328,7 @@
 <body>
 <div id="app">
   <div class="title-row">
+    <button class="sound-btn" id="soundBtn" type="button" aria-label="サウンド切り替え">🔇</button>
     <div class="title">うしぽこ 🐄</div>
     <button class="zukan-btn" id="zukanBtn" type="button">ずかん📖</button>
   </div>
@@ -436,7 +445,8 @@
     seriFactor: 1.0,
     lastUpdate: 0,                         // 成長を時刻差分で計算する基準（エポックms）
     zukan: normZukan(null),                // 牛ずかん：レア度4×サシ度5=固定20マス（index=レア度番号×5+☆-1）
-    mekiki: 0                              // めききゲージ（0-100）。100でお迎えが確定でんせつ
+    mekiki: 0,                             // めききゲージ（0-100）。100でお迎えが確定でんせつ
+    sound: false                           // 効果音（デフォルトはミュート）
   };
   function normMekiki(v){ return Math.min(MEKIKI_MAX, Math.max(0, (typeof v === "number" ? v : 0) | 0)); }
 
@@ -485,6 +495,7 @@
           state.lastUpdate = (typeof s.lastUpdate === "number") ? s.lastUpdate : Date.now();
           state.zukan = normZukan(s.zukan);   // 旧セーブ（zukanなし）は空ずかん。過去の出荷は遡及しない
           state.mekiki = normMekiki(s.mekiki); // 旧セーブ（mekikiなし）は0
+          state.sound = !!s.sound;            // 旧セーブ（soundなし）はミュート
           return;
         }
         // v2キーはあるが形が不正 → v1 に戻さず初期化（下へ抜ける）
@@ -516,6 +527,7 @@
     state.lastUpdate = Date.now();
     state.zukan = normZukan(null);
     state.mekiki = 0;
+    state.sound = false;
   }
 
   // ===== セリ係数（日替わり 0.8〜1.2・全牛房共通）=====
@@ -595,6 +607,78 @@
     toastTimer = setTimeout(function(){ toastEl.classList.remove("show"); }, 2200);
   }
 
+  // ===== 効果音（Web Audio API で合成・外部ファイル/ライブラリ不使用）=====
+  // AudioContext はユーザー操作の文脈で初期化・resume（iOS Safari の自動再生制限対応）。
+  var audioCtx = null, masterGain = null, lastPlay = {};
+  function initAudio() {
+    if (audioCtx) return;
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    try {
+      audioCtx = new AC();
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = 0.2;   // 全体音量ひかえめ
+      masterGain.connect(audioCtx.destination);
+    } catch (e) { audioCtx = null; }
+  }
+  function resumeAudio() { if (audioCtx && audioCtx.state === "suspended") { try { audioCtx.resume(); } catch (e) {} } }
+  // 単音：freq(Hz), start(秒後), dur(秒), 波形, ピーク音量
+  function note(freq, start, dur, type, peak) {
+    if (!audioCtx) return;
+    var t0 = audioCtx.currentTime + start;
+    var osc = audioCtx.createOscillator(), g = audioCtx.createGain();
+    osc.type = type || "sine";
+    osc.frequency.setValueAtTime(freq, t0);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(peak == null ? 0.5 : peak, t0 + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(g); g.connect(masterGain);
+    osc.start(t0); osc.stop(t0 + dur + 0.03);
+  }
+  var SOUNDS = {
+    poko: function(){                    // なでる：ぽこっ（ピッチをわずかにランダム＋下降）
+      if (!audioCtx) return;
+      var f = 600 + Math.random() * 140;
+      var t0 = audioCtx.currentTime;
+      var osc = audioCtx.createOscillator(), g = audioCtx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(f, t0);
+      osc.frequency.exponentialRampToValueAtTime(f * 0.55, t0 + 0.09);   // ぽこっと下がる
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.9, t0 + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.12);
+      osc.connect(g); g.connect(masterGain);
+      osc.start(t0); osc.stop(t0 + 0.14);
+    },
+    coin: function(){                    // 出荷：ちゃりん
+      note(988, 0, 0.08, "square", 0.5);
+      note(1319, 0.06, 0.20, "square", 0.5);
+    },
+    sparkle: function(){                 // ☆5サシ：きらーん（明るいアルペジオ）
+      [784, 988, 1175, 1568].forEach(function(f, i){ note(f, i * 0.06, 0.16, "triangle", 0.5); });
+    },
+    pon: function(){                     // お迎え確定（通常）：ぽん
+      note(520, 0, 0.14, "sine", 0.8);
+      note(340, 0.05, 0.16, "sine", 0.5);
+    },
+    fanfare: function(){                 // でんせつ登場：短いファンファーレ
+      [523, 659, 784, 1047].forEach(function(f, i){ note(f, i * 0.11, 0.22, "square", 0.45); });
+    },
+    tap: function(){                     // おうち/ごはん購入：こつん
+      note(300, 0, 0.05, "sine", 0.7);
+      note(200, 0.02, 0.09, "sine", 0.4);
+    }
+  };
+  function play(name) {
+    if (!state.sound) return;            // ミュート時は完全無音
+    initAudio(); resumeAudio();          // 呼び出し元がユーザー操作の文脈なら初期化される
+    if (!audioCtx || !SOUNDS[name]) return;
+    var now = Date.now();
+    if (lastPlay[name] && now - lastPlay[name] < 45) return;   // 同名を45ms未満で連打しても重ねない
+    lastPlay[name] = now;
+    SOUNDS[name]();
+  }
+
   // ===== アクション（すべて牛房単位）=====
   // お迎え1頭ぶんのレア度抽選＋めききゲージ処理。
   // ・満タン(100)なら確定でんせつ＋ゲージ0リセット（byMekiki=true）
@@ -664,6 +748,7 @@
     barn.lastPet = now;
     cow.growth = clampGrowth(cow.growth + PET_GAIN);
     floatText(ev, "+" + PET_GAIN + "% 💕", false);
+    play("poko");
     save(); render();
   }
   function ship(i) {
@@ -684,6 +769,8 @@
     if (zukanNew) state.zukan[zIdx] = { first: Date.now(), count: 1, best: price, frame: 0 };
     else { zCell.count++; if (price > zCell.best) zCell.best = price; }
     barn.cow = null;
+    play("coin");                      // 出荷：ちゃりん
+    if (stars >= 5) play("sparkle");   // ☆5サシ：きらーん（ちゃりんに重ねて）
     save(); render();
     showSashi(stars, bonus, price, zukanNew);
   }
@@ -698,6 +785,7 @@
     }
     state.money -= price;
     state.barns.push({ cow:null, lastPet:0 });
+    play("tap");                               // おうち購入：こつん
     var count = state.barns.length;
     if (checkRelief()) { render(); return; }   // 詰み状態なら即補填し応援金メッセージを優先
     save(); render();
@@ -832,10 +920,12 @@
                    timer: setTimeout(function(){ delete gachaFx[i]; render(); }, 600) };
     var r = slots[i].emoji.getBoundingClientRect();
     floatText({ clientX: r.left + r.width/2, clientY: r.top + r.height/2 }, "✨", false);
-    if (rarKey === "legend") celebrateLegend(i, byMekiki);
+    if (rarKey === "legend") celebrateLegend(i, byMekiki);   // ファンファーレは celebrateLegend 側
+    else play("pon");                                        // お迎え確定（通常）：ぽん
     render();
   }
   function celebrateLegend(i, byMekiki) {
+    play("fanfare");   // でんせつ登場：短いファンファーレ
     // 紙吹雪：カード内オーバーレイ。差分レンダリングが触らない要素なので render と干渉しない
     var conf = document.createElement("div");
     conf.className = "confetti";
@@ -1166,6 +1256,7 @@
     if (state.money < price) { toast("おさいふが たりないよ 💦"); return; }
     state.money -= price;
     cell.frame = level;
+    play("tap");   // 額縁購入：こつん
     save(); render();
     frameMenuEl.hidden = true;
     buildZukan();   // 開いているずかんの額縁表示を更新
@@ -1218,6 +1309,7 @@
     if (state.money < price) { toast("おさいふが たりないよ 💦"); return; }
     state.money -= price;
     barn.cow.feed = grade;
+    play("tap");   // ごはん購入：こつん
     save(); render();
     feedMenuEl.hidden = true;
     toast(FEED_DEFS[grade].name + "に かえた！🍚");
@@ -1291,7 +1383,7 @@
     document.addEventListener("touchend", function(e){
       // 活性ボタン上のタップのみ除外（確定操作の click を殺さない）。
       // disabled な「育て中」ボタンは抜け道になるので抑止対象に含める。
-      var btn = e.target && e.target.closest ? e.target.closest(".s-btn, .feed-btn, .bulk-btn, .zukan-btn") : null;
+      var btn = e.target && e.target.closest ? e.target.closest(".s-btn, .feed-btn, .bulk-btn, .zukan-btn, .sound-btn") : null;
       if (btn && !btn.disabled) { lastTouchEnd = Date.now(); return; }
       var now = Date.now();
       if (now - lastTouchEnd < 350) e.preventDefault();   // 直前タップから350ms未満=ダブルタップ
@@ -1303,10 +1395,23 @@
     document.addEventListener("gestureend",    function(e){ e.preventDefault(); });
   }
 
+  // ===== サウンドトグル（デフォルト🔇。ONで AudioContext を初期化＝iOS制限対応）=====
+  var soundBtn = document.getElementById("soundBtn");
+  function updateSoundBtn(){ soundBtn.textContent = state.sound ? "🔊" : "🔇"; }
+  soundBtn.addEventListener("click", function(){
+    state.sound = !state.sound;
+    if (state.sound) { initAudio(); resumeAudio(); play("tap"); }   // ONにした操作の文脈で初期化＋確認音
+    updateSoundBtn();
+    save();
+  });
+  // 効果音ONの間は、どのユーザー操作でも AudioContext を維持（タイマー発火音のための保険）
+  document.addEventListener("pointerdown", function(){ if (state.sound) { initAudio(); resumeAudio(); } }, { passive: true });
+
   // ===== 初期化 =====
   load();
   buildGrid();
   installZoomGuards();
+  updateSoundBtn();         // 保存されたミュート状態を反映
   processReturn();          // 読込時：オフライン分を反映し、必要ならおかえり表示
   startLoop();              // モーダル表示中もループは止めない
 
