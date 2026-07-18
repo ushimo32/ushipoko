@@ -638,7 +638,7 @@
   var SOUNDS = {
     poko: function(){                    // なでる：ぽこっ（ピッチをわずかにランダム＋下降）
       if (!audioCtx) return;
-      var f = 600 + Math.random() * 140;
+      var f = 840 + Math.random() * 140;   // 基本を高音寄りに（旧600→840・約1.4倍）。ランダム幅は維持
       var t0 = audioCtx.currentTime;
       var osc = audioCtx.createOscillator(), g = audioCtx.createGain();
       osc.type = "triangle";
