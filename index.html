@@ -657,9 +657,9 @@
     sparkle: function(){                 // ☆5サシ：きらーん（明るいアルペジオ）
       [784, 988, 1175, 1568].forEach(function(f, i){ note(f, i * 0.06, 0.16, "triangle", 0.5); });
     },
-    pon: function(){                     // お迎え確定（通常）：ぽん
-      note(520, 0, 0.14, "sine", 0.8);
-      note(340, 0.05, 0.16, "sine", 0.5);
+    pon: function(){                     // お迎え確定（通常）：ぽんっ→（上昇形・跳ねる印象・下降なし）
+      note(523, 0, 0.07, "triangle", 0.7);       // C5
+      note(784, 0.055, 0.11, "triangle", 0.85);  // G5（完全5度上・2音目をわずかに強く）
     },
     fanfare: function(){                 // でんせつ登場：短いファンファーレ
       [523, 659, 784, 1047].forEach(function(f, i){ note(f, i * 0.11, 0.22, "square", 0.45); });
