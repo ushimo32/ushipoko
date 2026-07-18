@@ -1190,11 +1190,20 @@
         b.type = "button";
         b.className = "s-btn buy";
         b.disabled = grade <= cur;   // 上位への変更のみ可（下位・同一は不可）
-        b.textContent = def.icon + " " + def.name
-          + (def.price ? " " + fmtMan(def.price) + "G" : "（無料）")
-          + (grade === cur ? "（たべてる）" : grade < cur ? "" : "");
         var effects = grade === 2 ? "成長+60%・サシ優遇" : grade === 1 ? "成長+30%" : "";
-        if (effects) b.textContent += "｜" + effects;
+        var main = document.createElement("span");
+        main.textContent = def.icon + " " + def.name
+          + (def.price ? " " + fmtMan(def.price) + "G" : "（無料）")
+          + (grade === cur ? "（たべてる）" : "")
+          + (effects ? "｜" + effects : "");
+        b.appendChild(main);
+        if (grade === 2) {   // さいこうのごはんだけ小さめの一言を2行目に
+          b.style.padding = "7px 6px";
+          var note = document.createElement("span");
+          note.textContent = "（もうけは出にくいけど、サシにゆめがある）";
+          note.style.cssText = "display:block; font-size:11px; font-weight:700; opacity:.85; margin-top:2px;";
+          b.appendChild(note);
+        }
         b.addEventListener("click", function(){ buyFeed(i, grade); });
         feedBtnsEl.appendChild(b);
       })(g);
