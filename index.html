@@ -969,8 +969,9 @@
     }, 1800);
   }
 
-  // ===== 表示状態の算出（純粋関数）: state → 1スロット分の表示プロパティ =====
-  // ここでは DOM に触らない。差分反映は applySlotView が担当。
+  // ===== 表示状態の算出（純粋関数）: state → { kind, props } =====
+  // 各ビューは「種別 kind」と、そのカードが必要とする props だけを返す。DOMには触らない。
+  // 差分反映は kind ごとの apply 関数（下の APPLY テーブル）が担当。
   // 牛あり
   function viewCow(barn) {
     var rar = rarityByKey(barn.cow.rarity);
@@ -978,11 +979,9 @@
     var st = growthStage(g);
     var ready = g >= 100;
     var feed = barn.cow.feed|0;
-    return {
+    return { kind: "cow", props: {
       slotCls: "slot", cursor: "pointer",
       topCls: "s-top", topText: st.name,
-      // ごはんボタン＝現在のごはん表示を兼ねる（f0ふつう/f1いい/f2さいこう）
-      feedShow: true, feedCls: "feed-btn f" + feed, feedText: FEED_DEFS[feed].icon,
       // 絵文字は一回り大きく（頭上の演出が指で隠れないサイズ感）
       emojiCls: "s-emoji tap",
       emojiSize: st.small ? "62px" : "76px",
@@ -993,12 +992,14 @@
       // 出荷は完成時のみ。育て中ボタンは非活性（なで無効）
       btnCls: "s-btn ship", btnDisabled: !ready,
       btnText: ready ? ("出荷 " + fmt(shipPriceFor(barn.cow)) + "G")
-                     : ("育て中 " + Math.floor(g) + "%")
-    };
+                     : ("育て中 " + Math.floor(g) + "%"),
+      // ごはんボタン＝現在のごはん表示を兼ねる（cow の時だけ表示。f0ふつう/f1いい/f2さいこう）
+      feedCls: "feed-btn f" + feed, feedText: FEED_DEFS[feed].icon
+    }};
   }
   // 空きおうち → 「＋」で迎える
   function viewEmpty() {
-    return {
+    return { kind: "empty", props: {
       slotCls: "slot pressable", cursor: "pointer",   // カード全体が押せる（押下でぷにっと）
       topCls: "s-top muted", topText: "あきべや",
       emojiCls: "s-emoji plus", emojiSize: "56px", emojiText: "＋",
@@ -1008,11 +1009,11 @@
       btnCls: state.mekiki >= MEKIKI_MAX ? "s-btn adopt mekiki-glow" : "s-btn adopt",
       btnDisabled: false,   // 不足時は adopt() がトーストで案内
       btnText: (state.mekiki >= MEKIKI_MAX ? "✨迎える " : "迎える ") + fmt(ADOPT_COST) + "G"
-    };
+    }};
   }
   // 次に増やせるおうち（🔒＋価格・購入可）
   function viewUnlockable(i) {
-    return {
+    return { kind: "unlockable", props: {
       slotCls: "slot locked pressable", cursor: "pointer",   // カード全体が押せる（押下でぷにっと）
       topCls: "s-top muted", topText: "おうちを増やす",
       emojiCls: "s-emoji plus", emojiSize: "44px", emojiText: "🔒",
@@ -1020,11 +1021,11 @@
       barCls: "s-bar hidden", fillWidth: "0%",
       btnCls: "s-btn buy", btnDisabled: false,   // 不足時は buyBarn() がトーストで案内
       btnText: "増やす " + fmt(BARN_PRICES[i-1]) + "G"
-    };
+    }};
   }
   // まだ増やせないおうち（🔒＋価格・非活性）
   function viewLocked(i) {
-    return {
+    return { kind: "locked", props: {
       slotCls: "slot locked", cursor: "default",
       topCls: "s-top muted", topText: "みかいほう",
       emojiCls: "s-emoji lock", emojiSize: "44px", emojiText: "🔒",
@@ -1032,19 +1033,20 @@
       barCls: "s-bar hidden", fillWidth: "0%",
       btnCls: "s-btn", btnDisabled: true,
       btnText: "🔒 " + fmt(BARN_PRICES[i-1]) + "G"
-    };
+    }};
   }
-  // ガチャ演出中のビュー。フェーズ中は値が不変なので、毎秒の render では差分ゼロ＝
+  // ガチャ演出中のビュー。フェーズ中は props が不変なので、毎秒の render では差分ゼロ＝
   // DOM書き換えが起きず、CSSアニメーション（揺れ・バウンド）がリセットされない。
+  // フェーズ3（ぽんっ）は cow 種に gacha-pop を足して返す（見た目は通常カード＋一度きりの演出）。
   function viewGacha(fx, barn) {
     if (fx.phase === 3) {
       var v = viewCow(barn);
-      v.emojiCls += " gacha-pop";   // ぽんっ（一度きりのCSSアニメ。0.6秒後にfx解除で外れる）
+      v.props.emojiCls += " gacha-pop";   // ぽんっ（一度きりのCSSアニメ。0.6秒後にfx解除で外れる）
       return v;
     }
     // すごい/でんせつはシルエット中だけ金色の告知
     var gold = fx.phase === 2 && (fx.rarKey === "great" || fx.rarKey === "legend");
-    return {
+    return { kind: "gacha", props: {
       slotCls: gold ? "slot gacha-gold" : "slot", cursor: "pointer",
       topCls: "s-top", topText: "おむかえ中…",
       emojiCls: fx.phase === 1 ? "s-emoji gacha-truck" : "s-emoji gacha-silhouette",
@@ -1053,7 +1055,7 @@
       midCls: "s-mid plain", midText: "だれかな…？",
       barCls: "s-bar hidden", fillWidth: "0%",
       btnCls: "s-btn", btnDisabled: true, btnText: "わくわく…"
-    };
+    }};
   }
   function computeSlotView(i) {
     var n = state.barns.length;
@@ -1066,31 +1068,52 @@
     return viewLocked(i);
   }
 
-  // ===== 差分反映：前回の表示状態と比べ、変化したプロパティだけ DOM へ =====
+  // ===== 差分反映：kind が変わったら全書き、同一 kind なら props 差分のみ =====
   // 毎秒変わるのは実質 fillWidth（成長バー）と btnText（育て中%）のみ。
   // className・絵文字は状態遷移時にしか書き換えないので、CSSアニメーションを妨げない。
+  // 新カード種の追加は「view関数を足す＋APPLYに apply関数を足す」だけで済む。
+  function setCls(el, val, prev){ if (val !== prev) el.className = val; }
+  function setText(el, val, prev){ if (val !== prev) el.textContent = val; }
+  function setStyle(el, prop, val, prev){ if (val !== prev) el.style[prop] = val; }
+  function setDisabled(el, val, prev){ if (val !== prev) el.disabled = val; }
+  // 全 kind 共通のスケルトン（top/emoji/mid/bar/fill/btn）。pp が null なら全書き。
+  function applyCommon(s, p, pp) {
+    setCls(s.slot, p.slotCls, pp && pp.slotCls);
+    setStyle(s.slot, "cursor", p.cursor, pp && pp.cursor);
+    setCls(s.top, p.topCls, pp && pp.topCls);
+    setText(s.top, p.topText, pp && pp.topText);
+    setCls(s.emoji, p.emojiCls, pp && pp.emojiCls);
+    setStyle(s.emoji, "fontSize", p.emojiSize, pp && pp.emojiSize);
+    setText(s.emoji, p.emojiText, pp && pp.emojiText);
+    setCls(s.mid, p.midCls, pp && pp.midCls);
+    setText(s.mid, p.midText, pp && pp.midText);
+    setCls(s.bar, p.barCls, pp && pp.barCls);
+    setStyle(s.fill, "width", p.fillWidth, pp && pp.fillWidth);
+    setCls(s.btn, p.btnCls, pp && pp.btnCls);
+    setDisabled(s.btn, p.btnDisabled, pp && pp.btnDisabled);
+    setText(s.btn, p.btnText, pp && pp.btnText);
+  }
+  // 牛：ごはんボタンを表示し、クラス/文字も差分反映
+  function applyCowView(s, p, pp) {
+    applyCommon(s, p, pp);
+    if (!pp) s.feed.style.display = "";   // 他kindからcowに入った時だけ表示ON
+    setCls(s.feed, p.feedCls, pp && pp.feedCls);
+    setText(s.feed, p.feedText, pp && pp.feedText);
+  }
+  // 牛以外（空き/解放可/未解放/ガチャ）：ごはんボタンは隠す
+  function applyPlainView(s, p, pp) {
+    applyCommon(s, p, pp);
+    if (!pp) s.feed.style.display = "none";   // 他kindから入った時だけ表示OFF
+  }
+  var APPLY = { cow: applyCowView, empty: applyPlainView, unlockable: applyPlainView, locked: applyPlainView, gacha: applyPlainView };
+
   var prevViews = [];
-  function applySlotView(i, v) {
-    var s = slots[i], p = prevViews[i] || {};
-    if (v.slotCls     !== p.slotCls)     s.slot.className = v.slotCls;
-    if (v.cursor      !== p.cursor)      s.slot.style.cursor = v.cursor;
-    if (v.topCls      !== p.topCls)      s.top.className = v.topCls;
-    if (v.topText     !== p.topText)     s.top.textContent = v.topText;
-    if (v.emojiCls    !== p.emojiCls)    s.emoji.className = v.emojiCls;
-    if (v.emojiSize   !== p.emojiSize)   s.emoji.style.fontSize = v.emojiSize;
-    if (v.emojiText   !== p.emojiText)   s.emoji.textContent = v.emojiText;
-    if (v.midCls      !== p.midCls)      s.mid.className = v.midCls;
-    if (v.midText     !== p.midText)     s.mid.textContent = v.midText;
-    if (v.barCls      !== p.barCls)      s.bar.className = v.barCls;
-    if (v.fillWidth   !== p.fillWidth)   s.fill.style.width = v.fillWidth;
-    if (v.btnCls      !== p.btnCls)      s.btn.className = v.btnCls;
-    if (v.btnDisabled !== p.btnDisabled) s.btn.disabled = v.btnDisabled;
-    if (v.btnText     !== p.btnText)     s.btn.textContent = v.btnText;
-    // ごはんボタン（feedShow 未定義のビュー＝非表示。非表示中はクラス/文字を書かない）
-    if (!!v.feedShow !== !!p.feedShow)   s.feed.style.display = v.feedShow ? "" : "none";
-    if (v.feedShow && v.feedCls  !== p.feedCls)  s.feed.className = v.feedCls;
-    if (v.feedShow && v.feedText !== p.feedText) s.feed.textContent = v.feedText;
-    prevViews[i] = v;
+  function applySlotView(i, view) {
+    var prev = prevViews[i];
+    // 同一 kind のときだけ前回 props を渡して差分反映。kind が変われば pp=null で全書き。
+    var pp = (prev && prev.kind === view.kind) ? prev.props : null;
+    APPLY[view.kind](slots[i], view.props, pp);
+    prevViews[i] = view;
   }
 
   var moneyEl = document.getElementById("money");
