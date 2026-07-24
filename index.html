@@ -1065,20 +1065,21 @@
     return '<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="'+(w/2)+'" fill="'+fill+'" stroke="'+COW_OUTLINE+'" stroke-width="2.5"/>'
       + '<rect x="'+x+'" y="'+(y+h-6)+'" width="'+w+'" height="6" rx="2" fill="#4a3b33"/>';
   }
-  // 黄色い耳標（全頭共通・角丸四角・輪郭はっきり）。遠目でも「黄色いタグ」と分かる大きさ
-  function earTag(cx, cy, w){
-    var h = w*0.8;
-    return '<rect x="'+(cx-w/2).toFixed(1)+'" y="'+(cy-h/2).toFixed(1)+'" width="'+w+'" height="'+h.toFixed(1)+'" rx="'+(w*0.26).toFixed(1)+'" fill="#f5d442" stroke="'+COW_OUTLINE+'" stroke-width="2.2"/>';
+  // 黄色い耳標（全頭共通）。(px,py)=耳の付け根の装着点。ピン留めの小丸から
+  // 縦長の角丸タグが下向きに垂れる。
+  function earTag(px, py, w){
+    var h = w*1.5, tx = (px - w/2).toFixed(1), ty = (py + 2).toFixed(1);
+    return '<rect x="'+tx+'" y="'+ty+'" width="'+w+'" height="'+h.toFixed(1)+'" rx="'+(w*0.32).toFixed(1)+'" fill="#f5d442" stroke="'+COW_OUTLINE+'" stroke-width="2.2"/>'
+      + '<circle cx="'+px+'" cy="'+py+'" r="2.2" fill="#b8912a" stroke="'+COW_OUTLINE+'" stroke-width="1.2"/>';   // ピン留めの小丸
   }
-  // グレーの鼻環（やんちゃな個体だけ）。鼻中隔を通って下へ垂れ下がる3/4円。
-  // (cx, topY) は鼻の下辺中央。輪の上端がそこに接し、下へぶら下がる。
-  function noseRing(cx, topY, r){
-    var cy = topY + r;                 // 輪の中心（上端が topY に接する）
-    var a = Math.PI * 0.28;            // 上部の隙間（鼻中隔を通る表現）
-    var x1 = (cx + r*Math.sin(a)).toFixed(1), y1 = (cy - r*Math.cos(a)).toFixed(1);   // 右上端
-    var x2 = (cx - r*Math.sin(a)).toFixed(1), y2 = (cy - r*Math.cos(a)).toFixed(1);   // 左上端
-    // 右上端から下を回って左上端まで（大きい弧＝ぶら下がる部分）
-    return '<path d="M'+x1+' '+y1+' A '+r+' '+r+' 0 1 1 '+x2+' '+y2+'" fill="none" stroke="#9a9a9a" stroke-width="2.2" stroke-linecap="round"/>';
+  // グレーの鼻環（やんちゃな個体だけ）。左右の鼻孔付近(x1,y1)(x2,y2)を上端に、
+  // その2点を結ぶ大きい弧で鼻の下を回ってぶら下がる1本の輪を描く。
+  // 直径は2点間距離より広く、鼻からしっかり下へ垂れる。
+  function noseRing(x1, y1, x2, y2){
+    var dx = x2-x1, dy = y2-y1, d = Math.sqrt(dx*dx + dy*dy);
+    var R = d * 0.95;   // 直径(2R) > 2点間距離 d
+    // 右端(x2,y2)から下を回って左端(x1,y1)へ（大きい弧＝鼻の下を通る部分）
+    return '<path d="M'+x2.toFixed(1)+' '+y2.toFixed(1)+' A '+R.toFixed(1)+' '+R.toFixed(1)+' 0 1 1 '+x1.toFixed(1)+' '+y1.toFixed(1)+'" fill="none" stroke="#9a9a9a" stroke-width="2.4" stroke-linecap="round"/>';
   }
   function resolveAdult(traits){
     var out=[];
@@ -1127,7 +1128,7 @@
     s += '<circle cx="'+hx+'" cy="'+hy+'" r="'+hR+'" fill="'+fill+'" stroke="'+COW_OUTLINE+'" stroke-width="3"/>';
     // 鼻づら
     s += E(hx+8, hy+18, 15, 11, traits.nose.fill, traits.nose.outline, 2, 0) + E(hx+2,hy+18,2,3,'#2a221e','',0,0) + E(hx+14,hy+18,2,3,'#2a221e','',0,0);
-    if (traits.rowdy) s += noseRing(hx+8, hy+29, 4.5);   // やんちゃ：鼻環（鼻の下辺 hy+18+11 に接続）
+    if (traits.rowdy) s += noseRing(hx+3, hy+21, hx+13, hy+21);   // やんちゃ：鼻環（左右の鼻孔付近から鼻先の下を回る）
     // ぶち（胴＋頭にクリップ）
     var res = resolveAdult(traits);
     s += '<g clip-path="url(#'+uid+')">';
@@ -1142,8 +1143,8 @@
     }
     // 目
     s += drawEye(152, 56, traits.legend || pointInPatches([152,56], res));
-    // 耳標（見えている側＝右耳。頭の上に描いて確実に見せる）
-    s += earTag(192, 48, 11);
+    // 耳標（見えている側＝右耳の付け根から下へ垂れる）
+    s += earTag(185, 54, 9);
     s += '</svg>';
     return s;
   }
@@ -1163,7 +1164,7 @@
     s += '<circle cx="110" cy="34" r="13" fill="'+(traits.legend ? "#5a4d42" : "#fff")+'" stroke="'+COW_OUTLINE+'" stroke-width="2.5"/>';
     // 鼻づら
     s += E(110,150,34,22, traits.nose.fill, traits.nose.outline, 2.5, 0) + E(98,150,3,5,'#2a221e','',0,0) + E(122,150,3,5,'#2a221e','',0,0);
-    if (traits.rowdy) s += noseRing(110, 172, 7);   // やんちゃ：鼻環（鼻の下辺 150+22 に接続）
+    if (traits.rowdy) s += noseRing(99, 156, 121, 156);   // やんちゃ：鼻環（左右の鼻孔付近を上端に鼻の下でつながる）
     // ぶち（顔にクリップ）
     var res = resolveFace(traits);
     s += '<g clip-path="url(#'+uid+')">';
@@ -1172,8 +1173,8 @@
     s += '</g>';
     // 目
     s += drawEye(78,95, traits.legend || pointInPatches([78,95], res)) + drawEye(142,95, traits.legend || pointInPatches([142,95], res));
-    // 耳標（正面では右耳）
-    s += earTag(184, 93, 20);
+    // 耳標（正面では右耳の付け根から下へ垂れる）
+    s += earTag(167, 91, 15);
     s += '</svg>';
     return s;
   }
