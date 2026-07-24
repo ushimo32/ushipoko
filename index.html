@@ -1002,8 +1002,8 @@
   var PATCH_ORDER = ["eye_patch","ear_patch","shoulder","back","rump","belly","chest","tailbase","midside"];
   // 顔形態でのぶち再マッピング（未掲載のぶちは顔に出さない。ear_patchは右耳を黒に）
   var FACE_MAP = { eye_patch: [146,74,21,16], back: [110,52,25,14], shoulder: [60,122,19,15], rump: [162,126,19,15] };
-  // レア度別: [nMin,nMax, scaleMin,scaleMax, noseProb]
-  var TRAIT_CFG = { normal:[2,3,0.8,1.1,0.25], good:[3,5,1.0,1.3,0.45], great:[5,7,1.3,1.7,0.7] };
+  // レア度別: [nMin,nMax, scaleMin,scaleMax, noseProb]（黒毛主体の色調へ：被覆率と黒鼻率を引き上げ）
+  var TRAIT_CFG = { normal:[4,6,1.2,1.6,0.5], good:[5,7,1.4,1.8,0.65], great:[6,8,1.6,2.1,0.85] };
   // ずかんの代表牛（レア度ごとに固定seed 1つ）
   var ZUKAN_REP_SEED = { normal: 0x51a2b3, good: 0x9c4d7e, great: 0x2f8a16, legend: 0x7b3e55 };
 
@@ -1070,9 +1070,15 @@
     var h = w*0.8;
     return '<rect x="'+(cx-w/2).toFixed(1)+'" y="'+(cy-h/2).toFixed(1)+'" width="'+w+'" height="'+h.toFixed(1)+'" rx="'+(w*0.26).toFixed(1)+'" fill="#f5d442" stroke="'+COW_OUTLINE+'" stroke-width="2.2"/>';
   }
-  // グレーの鼻環（やんちゃな個体だけ）
-  function noseRing(cx, cy, r){
-    return '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="#8f8f8f" stroke-width="2.2"/>';
+  // グレーの鼻環（やんちゃな個体だけ）。鼻中隔を通って下へ垂れ下がる3/4円。
+  // (cx, topY) は鼻の下辺中央。輪の上端がそこに接し、下へぶら下がる。
+  function noseRing(cx, topY, r){
+    var cy = topY + r;                 // 輪の中心（上端が topY に接する）
+    var a = Math.PI * 0.28;            // 上部の隙間（鼻中隔を通る表現）
+    var x1 = (cx + r*Math.sin(a)).toFixed(1), y1 = (cy - r*Math.cos(a)).toFixed(1);   // 右上端
+    var x2 = (cx - r*Math.sin(a)).toFixed(1), y2 = (cy - r*Math.cos(a)).toFixed(1);   // 左上端
+    // 右上端から下を回って左上端まで（大きい弧＝ぶら下がる部分）
+    return '<path d="M'+x1+' '+y1+' A '+r+' '+r+' 0 1 1 '+x2+' '+y2+'" fill="none" stroke="#9a9a9a" stroke-width="2.2" stroke-linecap="round"/>';
   }
   function resolveAdult(traits){
     var out=[];
@@ -1097,10 +1103,10 @@
     var uid = "c" + (svgUid++);
     var bRx = young ? 54 : 64, bRy = young ? 37 : 44, hR = young ? 35 : 32, legLen = young ? 26 : 34;
     var bx=95, by=95, hx=163, hy=62;
-    // 脚のx座標は体の縮小率(bRx/64)で追従（若い体でも脚が体の輪郭内に収まる）
+    // 脚のx座標は体の縮小率(bRx/64)で追従。取り付けを内側へ寄せ、成熟・若とも体の輪郭内に収める
     var sxy = bRx / 64;
-    var legY = by + bRy - (young ? 16 : 12);
-    var legX = [Math.round(bx-42*sxy), Math.round(bx-22*sxy), Math.round(bx+26*sxy), Math.round(bx+44*sxy)];   // 後左/後右/前左/前右
+    var legY = by + bRy - (young ? 16 : 14);
+    var legX = [Math.round(bx-36*sxy), Math.round(bx-18*sxy), Math.round(bx+18*sxy), Math.round(bx+36*sxy)];   // 後左/後右/前左/前右
     var s = '<svg viewBox="0 0 220 175" xmlns="http://www.w3.org/2000/svg">';
     s += '<defs><clipPath id="'+uid+'"><ellipse cx="'+bx+'" cy="'+by+'" rx="'+bRx+'" ry="'+bRy+'"/><circle cx="'+hx+'" cy="'+hy+'" r="'+hR+'"/></clipPath></defs>';
     // ホーン（頭の輪郭から明確に突き出す。成熟基準、若は70%）
@@ -1121,7 +1127,7 @@
     s += '<circle cx="'+hx+'" cy="'+hy+'" r="'+hR+'" fill="'+fill+'" stroke="'+COW_OUTLINE+'" stroke-width="3"/>';
     // 鼻づら
     s += E(hx+8, hy+18, 15, 11, traits.nose.fill, traits.nose.outline, 2, 0) + E(hx+2,hy+18,2,3,'#2a221e','',0,0) + E(hx+14,hy+18,2,3,'#2a221e','',0,0);
-    if (traits.rowdy) s += noseRing(hx+8, hy+28, 4);   // やんちゃ：鼻環
+    if (traits.rowdy) s += noseRing(hx+8, hy+29, 4.5);   // やんちゃ：鼻環（鼻の下辺 hy+18+11 に接続）
     // ぶち（胴＋頭にクリップ）
     var res = resolveAdult(traits);
     s += '<g clip-path="url(#'+uid+')">';
@@ -1157,7 +1163,7 @@
     s += '<circle cx="110" cy="34" r="13" fill="'+(traits.legend ? "#5a4d42" : "#fff")+'" stroke="'+COW_OUTLINE+'" stroke-width="2.5"/>';
     // 鼻づら
     s += E(110,150,34,22, traits.nose.fill, traits.nose.outline, 2.5, 0) + E(98,150,3,5,'#2a221e','',0,0) + E(122,150,3,5,'#2a221e','',0,0);
-    if (traits.rowdy) s += noseRing(110, 170, 6);   // やんちゃ：鼻環
+    if (traits.rowdy) s += noseRing(110, 172, 7);   // やんちゃ：鼻環（鼻の下辺 150+22 に接続）
     // ぶち（顔にクリップ）
     var res = resolveFace(traits);
     s += '<g clip-path="url(#'+uid+')">';
