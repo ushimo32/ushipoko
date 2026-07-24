@@ -1065,10 +1065,10 @@
     return '<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="'+(w/2)+'" fill="'+fill+'" stroke="'+COW_OUTLINE+'" stroke-width="2.5"/>'
       + '<rect x="'+x+'" y="'+(y+h-6)+'" width="'+w+'" height="6" rx="2" fill="#4a3b33"/>';
   }
-  // 黄色い耳標（全頭共通・角丸小四角・輪郭付き・控えめ）
+  // 黄色い耳標（全頭共通・角丸四角・輪郭はっきり）。遠目でも「黄色いタグ」と分かる大きさ
   function earTag(cx, cy, w){
-    var h = w*0.78;
-    return '<rect x="'+(cx-w/2).toFixed(1)+'" y="'+(cy-h/2).toFixed(1)+'" width="'+w+'" height="'+h.toFixed(1)+'" rx="'+(w*0.24).toFixed(1)+'" fill="#f6c945" stroke="'+COW_OUTLINE+'" stroke-width="1.5"/>';
+    var h = w*0.8;
+    return '<rect x="'+(cx-w/2).toFixed(1)+'" y="'+(cy-h/2).toFixed(1)+'" width="'+w+'" height="'+h.toFixed(1)+'" rx="'+(w*0.26).toFixed(1)+'" fill="#f5d442" stroke="'+COW_OUTLINE+'" stroke-width="2.2"/>';
   }
   // グレーの鼻環（やんちゃな個体だけ）
   function noseRing(cx, cy, r){
@@ -1103,9 +1103,10 @@
     var legX = [Math.round(bx-42*sxy), Math.round(bx-22*sxy), Math.round(bx+26*sxy), Math.round(bx+44*sxy)];   // 後左/後右/前左/前右
     var s = '<svg viewBox="0 0 220 175" xmlns="http://www.w3.org/2000/svg">';
     s += '<defs><clipPath id="'+uid+'"><ellipse cx="'+bx+'" cy="'+by+'" rx="'+bRx+'" ry="'+bRy+'"/><circle cx="'+hx+'" cy="'+hy+'" r="'+hR+'"/></clipPath></defs>';
-    // ホーン
-    s += '<path d="M150 40 L155 22 L161 40 Z" fill="'+HORN+'" stroke="'+COW_OUTLINE+'" stroke-width="2.5" stroke-linejoin="round"/>';
-    s += '<path d="M176 40 L181 22 L187 40 Z" fill="'+HORN+'" stroke="'+COW_OUTLINE+'" stroke-width="2.5" stroke-linejoin="round"/>';
+    // ホーン（頭の輪郭から明確に突き出す。成熟基準、若は70%）
+    var hs = young ? 0.7 : 1.0, hW = 18*hs, hH = 30*hs, hY = 41, hAdx = hW*0.35;
+    s += '<path d="M'+(150-hW/2).toFixed(1)+' '+hY+' L'+(150-hAdx).toFixed(1)+' '+(hY-hH).toFixed(1)+' L'+(150+hW/2).toFixed(1)+' '+hY+' Z" fill="'+HORN+'" stroke="'+COW_OUTLINE+'" stroke-width="3" stroke-linejoin="round"/>';   // 左角（外向き）
+    s += '<path d="M'+(178-hW/2).toFixed(1)+' '+hY+' L'+(178+hAdx).toFixed(1)+' '+(hY-hH).toFixed(1)+' L'+(178+hW/2).toFixed(1)+' '+hY+' Z" fill="'+HORN+'" stroke="'+COW_OUTLINE+'" stroke-width="3" stroke-linejoin="round"/>';   // 右角（外向き）
     // 耳（頭の後ろ）
     s += E(139,52,10,7, fill, COW_OUTLINE, 2.5, -25) + E(189,52,10,7, fill, COW_OUTLINE, 2.5, 25);
     // 後ろ足
@@ -1135,8 +1136,8 @@
     }
     // 目
     s += drawEye(152, 56, traits.legend || pointInPatches([152,56], res));
-    // 耳標（見えている側＝右耳の外上部。頭の上に描いて確実に見せる）
-    s += earTag(193, 47, 7);
+    // 耳標（見えている側＝右耳。頭の上に描いて確実に見せる）
+    s += earTag(192, 48, 11);
     s += '</svg>';
     return s;
   }
@@ -1166,7 +1167,7 @@
     // 目
     s += drawEye(78,95, traits.legend || pointInPatches([78,95], res)) + drawEye(142,95, traits.legend || pointInPatches([142,95], res));
     // 耳標（正面では右耳）
-    s += earTag(182, 92, 12);
+    s += earTag(184, 93, 20);
     s += '</svg>';
     return s;
   }
