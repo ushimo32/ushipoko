@@ -1012,12 +1012,13 @@
     var r = mulberry32(seed >>> 0);
     var t = { seed: seed>>>0, rarityKey: rarityKey, legend: rarityKey === "legend",
               patches: [], hasEarPatch: false, nose: null,
-              socksFront: false, socksBack: false, forehead: false };
+              socksFront: false, socksBack: false, forehead: false, rowdy: false };
     if (t.legend) {
       t.socksFront = r() < 0.6;
       t.socksBack  = r() < 0.5;
       t.forehead   = r() < 0.4;
       t.nose = { fill: "#4a3b33", outline: "#2a221e" };   // 黒鼻固定
+      t.rowdy = r() < 0.12;   // ★末尾に追加（既存の消費順を崩さない）
       return t;
     }
     var cfg = TRAIT_CFG[rarityKey] || TRAIT_CFG.normal;
@@ -1034,6 +1035,7 @@
     if (roll < pr*0.6) t.nose = { fill:"#4a3b33", outline:"#2a221e" };       // 黒鼻
     else if (roll < pr) t.nose = { fill:"#b98f96", outline:"#5a4642" };      // まだら
     else t.nose = { fill: COW_PINK, outline:"#8a625f" };                     // ピンク
+    t.rowdy = r() < 0.12;   // ★末尾に追加（既存の柄・鼻色の消費順を崩さない）
     return t;
   }
 
@@ -1063,6 +1065,15 @@
     return '<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="'+(w/2)+'" fill="'+fill+'" stroke="'+COW_OUTLINE+'" stroke-width="2.5"/>'
       + '<rect x="'+x+'" y="'+(y+h-6)+'" width="'+w+'" height="6" rx="2" fill="#4a3b33"/>';
   }
+  // 黄色い耳標（全頭共通・角丸小四角・輪郭付き・控えめ）
+  function earTag(cx, cy, w){
+    var h = w*0.78;
+    return '<rect x="'+(cx-w/2).toFixed(1)+'" y="'+(cy-h/2).toFixed(1)+'" width="'+w+'" height="'+h.toFixed(1)+'" rx="'+(w*0.24).toFixed(1)+'" fill="#f6c945" stroke="'+COW_OUTLINE+'" stroke-width="1.5"/>';
+  }
+  // グレーの鼻環（やんちゃな個体だけ）
+  function noseRing(cx, cy, r){
+    return '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="#8f8f8f" stroke-width="2.2"/>';
+  }
   function resolveAdult(traits){
     var out=[];
     for (var i=0;i<traits.patches.length;i++){
@@ -1086,8 +1097,10 @@
     var uid = "c" + (svgUid++);
     var bRx = young ? 54 : 64, bRy = young ? 37 : 44, hR = young ? 35 : 32, legLen = young ? 26 : 34;
     var bx=95, by=95, hx=163, hy=62;
-    var legY = by + bRy - 12;
-    var legX = [bx-42, bx-22, bx+26, bx+44];   // 後左/後右/前左/前右
+    // 脚のx座標は体の縮小率(bRx/64)で追従（若い体でも脚が体の輪郭内に収まる）
+    var sxy = bRx / 64;
+    var legY = by + bRy - (young ? 16 : 12);
+    var legX = [Math.round(bx-42*sxy), Math.round(bx-22*sxy), Math.round(bx+26*sxy), Math.round(bx+44*sxy)];   // 後左/後右/前左/前右
     var s = '<svg viewBox="0 0 220 175" xmlns="http://www.w3.org/2000/svg">';
     s += '<defs><clipPath id="'+uid+'"><ellipse cx="'+bx+'" cy="'+by+'" rx="'+bRx+'" ry="'+bRy+'"/><circle cx="'+hx+'" cy="'+hy+'" r="'+hR+'"/></clipPath></defs>';
     // ホーン
@@ -1107,6 +1120,7 @@
     s += '<circle cx="'+hx+'" cy="'+hy+'" r="'+hR+'" fill="'+fill+'" stroke="'+COW_OUTLINE+'" stroke-width="3"/>';
     // 鼻づら
     s += E(hx+8, hy+18, 15, 11, traits.nose.fill, traits.nose.outline, 2, 0) + E(hx+2,hy+18,2,3,'#2a221e','',0,0) + E(hx+14,hy+18,2,3,'#2a221e','',0,0);
+    if (traits.rowdy) s += noseRing(hx+8, hy+28, 4);   // やんちゃ：鼻環
     // ぶち（胴＋頭にクリップ）
     var res = resolveAdult(traits);
     s += '<g clip-path="url(#'+uid+')">';
@@ -1121,6 +1135,8 @@
     }
     // 目
     s += drawEye(152, 56, traits.legend || pointInPatches([152,56], res));
+    // 耳標（見えている側＝右耳の外上部。頭の上に描いて確実に見せる）
+    s += earTag(193, 47, 7);
     s += '</svg>';
     return s;
   }
@@ -1140,6 +1156,7 @@
     s += '<circle cx="110" cy="34" r="13" fill="'+(traits.legend ? "#5a4d42" : "#fff")+'" stroke="'+COW_OUTLINE+'" stroke-width="2.5"/>';
     // 鼻づら
     s += E(110,150,34,22, traits.nose.fill, traits.nose.outline, 2.5, 0) + E(98,150,3,5,'#2a221e','',0,0) + E(122,150,3,5,'#2a221e','',0,0);
+    if (traits.rowdy) s += noseRing(110, 170, 6);   // やんちゃ：鼻環
     // ぶち（顔にクリップ）
     var res = resolveFace(traits);
     s += '<g clip-path="url(#'+uid+')">';
@@ -1148,6 +1165,8 @@
     s += '</g>';
     // 目
     s += drawEye(78,95, traits.legend || pointInPatches([78,95], res)) + drawEye(142,95, traits.legend || pointInPatches([142,95], res));
+    // 耳標（正面では右耳）
+    s += earTag(182, 92, 12);
     s += '</svg>';
     return s;
   }
