@@ -137,6 +137,7 @@
   .s-top.muted { color: #b6a8c2; background: #efeaf3; }
 
   .s-emoji { font-size: 56px; line-height: 1.05; margin-top: 2px; touch-action: manipulation; }
+  .s-emoji svg { height: 74px; width: auto; display: block; }   /* 牛の個体SVG。タップ領域は従来の絵文字と同程度 */
   .s-emoji.tap {
     cursor: pointer;
     transition: transform .08s ease;
@@ -249,6 +250,7 @@
   .z-cell.done { background: #fff; cursor: pointer; box-shadow: 0 2px 6px rgba(255,170,200,0.25); }
   .z-cell.none { background: transparent; box-shadow: none; font-size: 14px; opacity: .45; }   /* 達成不可能マス（でんせつ☆1）の空欄 */
   .z-emoji { font-size: 16px; line-height: 1.1; }
+  .z-emoji svg { height: 30px; width: auto; display: block; margin: 0 auto; }   /* ずかんの代表牛SVG（縮小） */
   .z-sub { font-size: 8px; font-weight: 800; color: #8a7480; line-height: 1.3; }
   /* 額縁（装飾のみ・効果なし） */
   .z-cell.f1 { border-color: #b98a54; background: #faf0e2; }
@@ -446,7 +448,8 @@
     lastUpdate: 0,                         // 成長を時刻差分で計算する基準（エポックms）
     zukan: normZukan(null),                // 牛ずかん：レア度4×サシ度5=固定20マス（index=レア度番号×5+☆-1）
     mekiki: 0,                             // めききゲージ（0-100）。100でお迎えが確定でんせつ
-    sound: false                           // 効果音（デフォルトはミュート）
+    sound: false,                          // 効果音（デフォルトはミュート）
+    version: 2                             // セーブ内部バージョン（読み側は当面無視。将来の移行の下準備）
   };
   function normMekiki(v){ return Math.min(MEKIKI_MAX, Math.max(0, (typeof v === "number" ? v : 0) | 0)); }
 
@@ -470,8 +473,10 @@
   function clampGrowth(g){ return Math.max(0, Math.min(100, g)); }
   function normCow(c){
     if (c && typeof c === "object" && typeof c.growth === "number" && c.rarity) {
-      // 旧セーブの lastTick は無視（成長は state.lastUpdate 基準）。feed 欠落は 0 に正規化
-      return { rarity:c.rarity, growth:clampGrowth(c.growth), feed: Math.min(2, Math.max(0, c.feed|0)) };
+      // 旧セーブの lastTick は無視（成長は state.lastUpdate 基準）。feed 欠落は 0 に正規化。
+      // seed 未所持の既存牛にはランダム seed を付与（以降は不変＝柄が固定）。
+      return { rarity:c.rarity, growth:clampGrowth(c.growth), feed: Math.min(2, Math.max(0, c.feed|0)),
+               seed: (typeof c.seed === "number") ? (c.seed >>> 0) : randomSeed() };
     }
     return null;
   }
@@ -712,7 +717,7 @@
     if (state.money < ADOPT_COST) { toast("おさいふが たりないよ 💦"); return; }
     state.money -= ADOPT_COST;
     var res = rollAdoptRarity();
-    barn.cow = { rarity: res.rar.key, growth: 0, feed: 0 };
+    barn.cow = { rarity: res.rar.key, growth: 0, feed: 0, seed: randomSeed() };
     save();                    // 減算・抽選はここで確定保存（演出中にリロードしても牛は存在）
     startGacha(i, res.rar.key, false, res.byMekiki);   // 以降は見せ方のみ。render は演出側が呼ぶ
   }
@@ -728,7 +733,7 @@
     for (var k=0;k<idxs.length;k++){
       // 1頭ごとに rollAdoptRarity（めきき加算/発動は先頭の1頭で消費され、以降は通常＋加算）
       var res = rollAdoptRarity();
-      state.barns[idxs[k]].cow = { rarity: res.rar.key, growth: 0, feed: 0 };
+      state.barns[idxs[k]].cow = { rarity: res.rar.key, growth: 0, feed: 0, seed: randomSeed() };
       rolls.push(res);
     }
     save();   // 全頭ぶんの減算・抽選を確定保存（演出中にリロードしても牛は存在）
@@ -969,6 +974,195 @@
     }, 1800);
   }
 
+  // ===== 牛の個体ビジュアル（seed → traits → SVG。自己生成SVGのみ）=====
+  var COW_OUTLINE = "rgb(74,62,56)";
+  var COW_PATCH = "#42342c";
+  var COW_PINK = "#f7c8cf";
+  var COW_BODY = "#faf6f2";      // 非でんせつの地色（白系）
+  var LEGEND_BASE = "#39302a";   // でんせつの黒毛
+  var HORN = "#efe3d0";
+  var svgUid = 0;
+  function randomSeed(){ return (Math.random() * 4294967296) >>> 0; }
+  // PRNG: mulberry32（同じseedは常に同じ牛）
+  function mulberry32(seed) {
+    var a = seed >>> 0;
+    return function() {
+      a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  // ぶちカタログ（成熟全身の基準座標）[x,y,w,h]
+  var PATCH_CATALOG = {
+    eye_patch: [148,43,14,10], ear_patch: [186,38,11,8], shoulder: [133,82,19,15],
+    back: [95,62,23,13], rump: [50,82,21,16], belly: [85,114,19,12],
+    chest: [126,106,15,11], tailbase: [40,66,13,11], midside: [100,92,17,13]
+  };
+  var PATCH_ORDER = ["eye_patch","ear_patch","shoulder","back","rump","belly","chest","tailbase","midside"];
+  // 顔形態でのぶち再マッピング（未掲載のぶちは顔に出さない。ear_patchは右耳を黒に）
+  var FACE_MAP = { eye_patch: [146,74,21,16], back: [110,52,25,14], shoulder: [60,122,19,15], rump: [162,126,19,15] };
+  // レア度別: [nMin,nMax, scaleMin,scaleMax, noseProb]
+  var TRAIT_CFG = { normal:[2,3,0.8,1.1,0.25], good:[3,5,1.0,1.3,0.45], great:[5,7,1.3,1.7,0.7] };
+  // ずかんの代表牛（レア度ごとに固定seed 1つ）
+  var ZUKAN_REP_SEED = { normal: 0x51a2b3, good: 0x9c4d7e, great: 0x2f8a16, legend: 0x7b3e55 };
+
+  // seed+レア度 → traits（一箇所に集約）
+  function cowTraits(seed, rarityKey) {
+    var r = mulberry32(seed >>> 0);
+    var t = { seed: seed>>>0, rarityKey: rarityKey, legend: rarityKey === "legend",
+              patches: [], hasEarPatch: false, nose: null,
+              socksFront: false, socksBack: false, forehead: false };
+    if (t.legend) {
+      t.socksFront = r() < 0.6;
+      t.socksBack  = r() < 0.5;
+      t.forehead   = r() < 0.4;
+      t.nose = { fill: "#4a3b33", outline: "#2a221e" };   // 黒鼻固定
+      return t;
+    }
+    var cfg = TRAIT_CFG[rarityKey] || TRAIT_CFG.normal;
+    var n = cfg[0] + Math.floor(r() * (cfg[1] - cfg[0] + 1));
+    var order = PATCH_ORDER.slice();
+    for (var i=order.length-1;i>0;i--){ var j=Math.floor(r()*(i+1)); var tmp=order[i]; order[i]=order[j]; order[j]=tmp; }  // Fisher-Yates
+    for (var k=0;k<n;k++){
+      var scale = cfg[2] + r()*(cfg[3]-cfg[2]);
+      var dx = (r()-0.5)*10, dy = (r()-0.5)*8, rot = (r()-0.5)*40;
+      if (order[k] === "ear_patch") t.hasEarPatch = true;
+      t.patches.push({ name: order[k], scale: scale, dx: dx, dy: dy, rot: rot });
+    }
+    var pr = cfg[4], roll = r();
+    if (roll < pr*0.6) t.nose = { fill:"#4a3b33", outline:"#2a221e" };       // 黒鼻
+    else if (roll < pr) t.nose = { fill:"#b98f96", outline:"#5a4642" };      // まだら
+    else t.nose = { fill: COW_PINK, outline:"#8a625f" };                     // ピンク
+    return t;
+  }
+
+  // 回転楕円内の点判定（目の視認性用）
+  function pointInPatches(pt, res) {
+    for (var i=0;i<res.length;i++){
+      var p = res[i], ang = -(p.rot||0)*Math.PI/180;
+      var dx = pt[0]-p.cx, dy = pt[1]-p.cy;
+      var rx = dx*Math.cos(ang) - dy*Math.sin(ang);
+      var ry = dx*Math.sin(ang) + dy*Math.cos(ang);
+      if ((rx*rx)/(p.rx*p.rx) + (ry*ry)/(p.ry*p.ry) <= 1) return true;
+    }
+    return false;
+  }
+  // 目: 暗地なら白目リング＋黒瞳、白地なら黒目
+  function drawEye(x, y, dark) {
+    return dark
+      ? '<circle cx="'+x+'" cy="'+y+'" r="5.4" fill="#fff"/><circle cx="'+x+'" cy="'+y+'" r="3.1" fill="#2a221e"/>'
+      : '<circle cx="'+x+'" cy="'+y+'" r="3.6" fill="#2a221e"/>';
+  }
+  function E(cx,cy,rx,ry,fill,stroke,sw,rot){
+    return '<ellipse cx="'+cx+'" cy="'+cy+'" rx="'+rx+'" ry="'+ry+'" fill="'+fill+'"'
+      + (stroke ? ' stroke="'+stroke+'" stroke-width="'+sw+'"' : '')
+      + (rot ? ' transform="rotate('+rot.toFixed(1)+' '+cx+' '+cy+')"' : '') + '/>';
+  }
+  function legRect(x, y, w, h, fill){
+    return '<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="'+(w/2)+'" fill="'+fill+'" stroke="'+COW_OUTLINE+'" stroke-width="2.5"/>'
+      + '<rect x="'+x+'" y="'+(y+h-6)+'" width="'+w+'" height="6" rx="2" fill="#4a3b33"/>';
+  }
+  function resolveAdult(traits){
+    var out=[];
+    for (var i=0;i<traits.patches.length;i++){
+      var p=traits.patches[i], b=PATCH_CATALOG[p.name];
+      out.push({ cx:b[0]+p.dx, cy:b[1]+p.dy, rx:b[2]*p.scale, ry:b[3]*p.scale, rot:p.rot });
+    }
+    return out;
+  }
+  function resolveFace(traits){
+    var out=[];
+    for (var i=0;i<traits.patches.length;i++){
+      var p=traits.patches[i], b=FACE_MAP[p.name];
+      if (!b) continue;   // 顔に出さないぶち（ear_patchは別処理）
+      out.push({ cx:b[0]+p.dx, cy:b[1]+p.dy, rx:b[2]*p.scale, ry:b[3]*p.scale, rot:p.rot });
+    }
+    return out;
+  }
+  // 全身（成熟 adult / 若い young）
+  function drawFull(traits, young) {
+    var fill = traits.legend ? LEGEND_BASE : COW_BODY;
+    var uid = "c" + (svgUid++);
+    var bRx = young ? 54 : 64, bRy = young ? 37 : 44, hR = young ? 35 : 32, legLen = young ? 26 : 34;
+    var bx=95, by=95, hx=163, hy=62;
+    var legY = by + bRy - 12;
+    var legX = [bx-42, bx-22, bx+26, bx+44];   // 後左/後右/前左/前右
+    var s = '<svg viewBox="0 0 220 175" xmlns="http://www.w3.org/2000/svg">';
+    s += '<defs><clipPath id="'+uid+'"><ellipse cx="'+bx+'" cy="'+by+'" rx="'+bRx+'" ry="'+bRy+'"/><circle cx="'+hx+'" cy="'+hy+'" r="'+hR+'"/></clipPath></defs>';
+    // ホーン
+    s += '<path d="M150 40 L155 22 L161 40 Z" fill="'+HORN+'" stroke="'+COW_OUTLINE+'" stroke-width="2.5" stroke-linejoin="round"/>';
+    s += '<path d="M176 40 L181 22 L187 40 Z" fill="'+HORN+'" stroke="'+COW_OUTLINE+'" stroke-width="2.5" stroke-linejoin="round"/>';
+    // 耳（頭の後ろ）
+    s += E(139,52,10,7, fill, COW_OUTLINE, 2.5, -25) + E(189,52,10,7, fill, COW_OUTLINE, 2.5, 25);
+    // 後ろ足
+    s += legRect(legX[0], legY, 10, legLen, fill) + legRect(legX[1], legY, 10, legLen, fill);
+    // 尻尾
+    s += '<path d="M'+(bx-bRx+3)+' '+(by-4)+' q -16 22 -7 48" fill="none" stroke="'+COW_OUTLINE+'" stroke-width="3.5" stroke-linecap="round"/>' + E(bx-bRx-4, by+44, 5,7, COW_PATCH, '', 0, 0);
+    // 胴
+    s += E(bx,by,bRx,bRy, fill, COW_OUTLINE, 3, 0);
+    // 前足
+    s += legRect(legX[2], legY, 10, legLen, fill) + legRect(legX[3], legY, 10, legLen, fill);
+    // 頭
+    s += '<circle cx="'+hx+'" cy="'+hy+'" r="'+hR+'" fill="'+fill+'" stroke="'+COW_OUTLINE+'" stroke-width="3"/>';
+    // 鼻づら
+    s += E(hx+8, hy+18, 15, 11, traits.nose.fill, traits.nose.outline, 2, 0) + E(hx+2,hy+18,2,3,'#2a221e','',0,0) + E(hx+14,hy+18,2,3,'#2a221e','',0,0);
+    // ぶち（胴＋頭にクリップ）
+    var res = resolveAdult(traits);
+    s += '<g clip-path="url(#'+uid+')">';
+    for (var i=0;i<res.length;i++){ var p=res[i]; s += E(p.cx,p.cy,p.rx,p.ry, COW_PATCH,'',0,p.rot); }
+    if (traits.legend && traits.forehead) s += E(hx-4, hy-11, 12, 9, '#f2ece2','',0,0);   // 額の白
+    s += '</g>';
+    // でんせつ 白ソックス（足の下部に白）
+    if (traits.legend) {
+      var sock = function(x){ return '<rect x="'+x+'" y="'+(legY+legLen-17)+'" width="10" height="17" rx="5" fill="#f2ece2"/>'; };
+      if (traits.socksBack)  s += sock(legX[0]) + sock(legX[1]);
+      if (traits.socksFront) s += sock(legX[2]) + sock(legX[3]);
+    }
+    // 目
+    s += drawEye(152, 56, traits.legend || pointInPatches([152,56], res));
+    s += '</svg>';
+    return s;
+  }
+  // 顔（ミルク期）
+  function drawFace(traits) {
+    var fill = traits.legend ? LEGEND_BASE : COW_BODY;
+    var uid = "f" + (svgUid++);
+    var hx=110, hy=105, hrx=76, hry=68;
+    var earR = traits.hasEarPatch ? COW_PATCH : fill;   // ear_patch選択で右耳黒
+    var s = '<svg viewBox="0 0 220 200" xmlns="http://www.w3.org/2000/svg">';
+    s += '<defs><clipPath id="'+uid+'"><ellipse cx="'+hx+'" cy="'+hy+'" rx="'+hrx+'" ry="'+hry+'"/></clipPath></defs>';
+    // 耳
+    s += E(44,86,22,16, fill, COW_OUTLINE, 3, -22) + E(176,86,22,16, earR, COW_OUTLINE, 3, 22);
+    // 頭
+    s += '<ellipse cx="'+hx+'" cy="'+hy+'" rx="'+hrx+'" ry="'+hry+'" fill="'+fill+'" stroke="'+COW_OUTLINE+'" stroke-width="3.5"/>';
+    // 頭頂のつむじ（白丸・地色連動）
+    s += '<circle cx="110" cy="34" r="13" fill="'+(traits.legend ? "#5a4d42" : "#fff")+'" stroke="'+COW_OUTLINE+'" stroke-width="2.5"/>';
+    // 鼻づら
+    s += E(110,150,34,22, traits.nose.fill, traits.nose.outline, 2.5, 0) + E(98,150,3,5,'#2a221e','',0,0) + E(122,150,3,5,'#2a221e','',0,0);
+    // ぶち（顔にクリップ）
+    var res = resolveFace(traits);
+    s += '<g clip-path="url(#'+uid+')">';
+    for (var i=0;i<res.length;i++){ var p=res[i]; s += E(p.cx,p.cy,p.rx,p.ry, COW_PATCH,'',0,p.rot); }
+    if (traits.legend && traits.forehead) s += E(110,52,25,14, '#f2ece2','',0,0);
+    s += '</g>';
+    // 目
+    s += drawEye(78,95, traits.legend || pointInPatches([78,95], res)) + drawEye(142,95, traits.legend || pointInPatches([142,95], res));
+    s += '</svg>';
+    return s;
+  }
+  // 生成キャッシュ（seed+レア度+形態が同じなら同一文字列＝毎秒の再生成を防ぐ）
+  var svgCache = {};
+  function cowSvg(seed, rarityKey, form) {
+    var key = (seed>>>0) + "|" + rarityKey + "|" + form;
+    var c = svgCache[key];
+    if (c) return c;
+    var traits = cowTraits(seed>>>0, rarityKey);
+    var svg = form === "face" ? drawFace(traits) : drawFull(traits, form === "young");
+    svgCache[key] = svg;
+    return svg;
+  }
+
   // ===== 表示状態の算出（純粋関数）: state → { kind, props } =====
   // 各ビューは「種別 kind」と、そのカードが必要とする props だけを返す。DOMには触らない。
   // 差分反映は kind ごとの apply 関数（下の APPLY テーブル）が担当。
@@ -979,13 +1173,14 @@
     var st = growthStage(g);
     var ready = g >= 100;
     var feed = barn.cow.feed|0;
+    // 形態: 顔(ミルク期)/若い全身(もぐもぐ期)/成熟全身(むしゃむしゃ期〜出荷)
+    var form = g < 33 ? "face" : (g < 66 ? "young" : "adult");
     return { kind: "cow", props: {
       slotCls: "slot", cursor: "pointer",
       topCls: "s-top", topText: st.name,
-      // 絵文字は一回り大きく（頭上の演出が指で隠れないサイズ感）
+      // seed＋形態から個体SVG（同一なら文字列一致でキャッシュ→毎秒再生成しない）
       emojiCls: "s-emoji tap",
-      emojiSize: st.small ? "62px" : "76px",
-      emojiText: st.small ? rar.face : rar.faceBig,
+      svg: cowSvg(barn.cow.seed, barn.cow.rarity, form),
       midCls: "s-mid " + rar.cls,
       midText: (rar.star ? rar.star + " " : "") + rar.name + "（×" + rar.mult.toFixed(1) + "）",
       barCls: "s-bar", fillWidth: g + "%",
@@ -1046,16 +1241,20 @@
     }
     // すごい/でんせつはシルエット中だけ金色の告知
     var gold = fx.phase === 2 && (fx.rarKey === "great" || fx.rarKey === "legend");
-    return { kind: "gacha", props: {
+    var props = {
       slotCls: gold ? "slot gacha-gold" : "slot", cursor: "pointer",
       topCls: "s-top", topText: "おむかえ中…",
-      emojiCls: fx.phase === 1 ? "s-emoji gacha-truck" : "s-emoji gacha-silhouette",
-      emojiSize: "56px",
-      emojiText: fx.phase === 1 ? "🚚" : "🐄",
       midCls: "s-mid plain", midText: "だれかな…？",
       barCls: "s-bar hidden", fillWidth: "0%",
       btnCls: "s-btn", btnDisabled: true, btnText: "わくわく…"
-    }};
+    };
+    if (fx.phase === 1) {                 // 1) 🚚
+      props.emojiCls = "s-emoji gacha-truck"; props.emojiText = "🚚"; props.emojiSize = "56px";
+    } else {                             // 2) 個体SVGのグレースケール版シルエット（CSS filter）
+      props.emojiCls = "s-emoji gacha-silhouette";
+      props.svg = cowSvg(barn.cow.seed, barn.cow.rarity, "adult");
+    }
+    return { kind: "gacha", props: props };
   }
   function computeSlotView(i) {
     var n = state.barns.length;
@@ -1074,6 +1273,7 @@
   // 新カード種の追加は「view関数を足す＋APPLYに apply関数を足す」だけで済む。
   function setCls(el, val, prev){ if (val !== prev) el.className = val; }
   function setText(el, val, prev){ if (val !== prev) el.textContent = val; }
+  function setHTML(el, val, prev){ if (val !== prev) el.innerHTML = val; }
   function setStyle(el, prop, val, prev){ if (val !== prev) el.style[prop] = val; }
   function setDisabled(el, val, prev){ if (val !== prev) el.disabled = val; }
   // 全 kind 共通のスケルトン（top/emoji/mid/bar/fill/btn）。pp が null なら全書き。
@@ -1083,8 +1283,12 @@
     setCls(s.top, p.topCls, pp && pp.topCls);
     setText(s.top, p.topText, pp && pp.topText);
     setCls(s.emoji, p.emojiCls, pp && pp.emojiCls);
-    setStyle(s.emoji, "fontSize", p.emojiSize, pp && pp.emojiSize);
-    setText(s.emoji, p.emojiText, pp && pp.emojiText);
+    // 絵文字は svg（個体ビジュアル）か text（＋/🔒/🚚）のどちらか。svg優先で差分反映。
+    if (p.svg !== undefined) setHTML(s.emoji, p.svg, pp && pp.svg);
+    else {
+      setStyle(s.emoji, "fontSize", p.emojiSize, pp && pp.emojiSize);
+      setText(s.emoji, p.emojiText, pp && pp.emojiText);
+    }
     setCls(s.mid, p.midCls, pp && pp.midCls);
     setText(s.mid, p.midText, pp && pp.midText);
     setCls(s.bar, p.barCls, pp && pp.barCls);
@@ -1253,7 +1457,9 @@
     var d = document.createElement("div");
     if (cell) {
       d.className = "z-cell done" + (cell.frame ? " f" + cell.frame : "");
-      var e1 = document.createElement("div"); e1.className = "z-emoji"; e1.textContent = "🐄";
+      var repRar = RARITIES[Math.floor(idx / 5)].key;
+      var e1 = document.createElement("div"); e1.className = "z-emoji";
+      e1.innerHTML = cowSvg(ZUKAN_REP_SEED[repRar], repRar, "adult");   // レア度別の代表SVG（行ごとに固定seed・成熟全身の縮小版）
       var e2 = document.createElement("div"); e2.className = "z-sub"; e2.textContent = "×" + cell.count;
       var e3 = document.createElement("div"); e3.className = "z-sub"; e3.textContent = fmtMan(cell.best) + "G";
       d.appendChild(e1); d.appendChild(e2); d.appendChild(e3);
